@@ -47,7 +47,7 @@ namespace co {
          * @param order: 委托
          * @return: 处理后的开平仓标记
          */
-        int64_t GetAutoOcFlag(const co::fbs::TradeOrderT& order);
+        int64_t GetAutoOcFlag(const std::string& fund_id, int64_t bs_flag, const MemTradeOrder& order);
 
     protected:
         bool IsAccountInitialized(std::string fund_id);

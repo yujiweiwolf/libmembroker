@@ -11,9 +11,9 @@ namespace co {
          start_time_ = x::RawDateTime();
     }
 
-    void MemBrokerServer::Init(MemBrokerOptionsPtr options, MemBrokerPtr broker) {
-        opt_ = options;
-        broker->Init(*options, this);
+    void MemBrokerServer::Init(MemBrokerOptionsPtr option, MemBrokerPtr broker) {
+        opt_ = option;
+        broker->Init(*option, this);
         x::Sleep(1000);
         broker_ = broker;
         processor_ = std::make_shared<MemProcessor>(this);
@@ -40,7 +40,8 @@ namespace co {
         }
         auto begin_time = x::Timestamp();
         string inner_broker_file = "inner_broker";
-        inner_writer_.Open("../data", inner_broker_file.c_str(), 64 << 20, true);
+        inner_writer_.Open("../data", inner_broker_file.c_str(), kInnerBrokerMemSize << 20, true);
+
         enable_upload_asset_ = opt_->enable_upload() && opt_->query_asset_interval_ms() > 0;
         enable_upload_position_ = opt_->enable_upload() && opt_->query_position_interval_ms() > 0;
         enable_upload_knock_ = opt_->enable_upload();
@@ -54,14 +55,14 @@ namespace co {
          return broker_->ExitAccout(fund_id);
      }
 
-    void* MemBrokerServer::CreateMemBuffer(int length) {
-        void* buffer = inner_writer_.OpenFrame(length);
-        return buffer;
-    }
-
-    void MemBrokerServer::PushMemBuffer(int function) {
-        inner_writer_.CloseFrame(function);
-    }
+//    void* MemBrokerServer::CreateMemBuffer(int length) {
+//        void* buffer = inner_writer_.OpenFrame(length);
+//        return buffer;
+//    }
+//
+//    void MemBrokerServer::PushMemBuffer(int function) {
+//        inner_writer_.CloseFrame(function);
+//    }
 
     void MemBrokerServer::BeginTask() {
         active_task_timestamp_ = x::Timestamp();
@@ -83,47 +84,37 @@ namespace co {
                 option_fund_ids.push_back(acc.fund_id);
             }
         }
+
         if (opt_->enable_stock_short_selling() && !stock_fund_ids.empty()) {
             broker_->inner_stock_master()->Clear();
-            for (size_t i = 0; i < stock_fund_ids.size(); i++) {
-                std::string fund_id = stock_fund_ids[i];
-                try {
-                    LOG_INFO << "query stock init position: fund_id = " << fund_id << " ...";
-                    void* buffer = inner_writer_.OpenFrame(sizeof(MemGetTradePositionMessage));;
-                    MemGetTradePositionMessage* req = (MemGetTradePositionMessage*)buffer;
-                    string id = "INIT_STOCK_" + x::UUID();
-                    req->timestamp = x::RawDateTime();
-                    strncpy(req->id, id.c_str(), id.length());
-                    strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
-                    inner_writer_.CloseFrame(kMemTypeQueryTradePositionReq);
-                } catch (std::exception & e) {
-                    LOG_ERROR << "query stock init position failed: fund_id = " << fund_id << ", error: " << e.what();
-                }
+            for (auto& it : stock_fund_ids) {
+                std::string& fund_id = it;
+                LOG_INFO << "query stock init position: fund_id = " << fund_id << " ...";
+                void* buffer = inner_writer_.OpenFrame(sizeof(MemGetTradePositionMessage));;
+                MemGetTradePositionMessage* req = (MemGetTradePositionMessage*)buffer;
+                string id = "INIT_STOCK_" + x::UUID();
+                req->timestamp = x::RawDateTime();
+                strncpy(req->id, id.c_str(), id.length());
+                strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
+                inner_writer_.CloseFrame(kMemTypeQueryTradePositionReq);
             }
         }
+
         if (!option_fund_ids.empty()) {
             broker_->inner_option_master()->Clear();
-            for (size_t i = 0; i < option_fund_ids.size(); i++) {
-                std::string fund_id = option_fund_ids[i];
-                try {
-                    LOG_INFO << "query option init position: fund_id = " << fund_id << " ...";
-                    void* buffer = inner_writer_.OpenFrame(sizeof(MemGetTradePositionMessage));;
-                    MemGetTradePositionMessage* req = (MemGetTradePositionMessage*)buffer;
-                    string id = "INIT_OPTION_" + x::UUID();
-                    req->timestamp = x::RawDateTime();
-                    strncpy(req->id, id.c_str(), id.length());
-                    strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
-                    inner_writer_.CloseFrame(kMemTypeQueryTradePositionReq);
-                } catch (std::exception & e) {
-                    LOG_ERROR << "query option init position failed: fund_id = " << fund_id << ", error: " << e.what();
-                }
+            for (auto& it : option_fund_ids) {
+                std::string& fund_id = it;
+                LOG_INFO << "query option init position: fund_id = " << fund_id << " ...";
+                void* buffer = inner_writer_.OpenFrame(sizeof(MemGetTradePositionMessage));;
+                MemGetTradePositionMessage* req = (MemGetTradePositionMessage*)buffer;
+                string id = "INIT_OPTION_" + x::UUID();
+                req->timestamp = x::RawDateTime();
+                strncpy(req->id, id.c_str(), id.length());
+                strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
+                inner_writer_.CloseFrame(kMemTypeQueryTradePositionReq);
             }
         }
      }
-//
-//    void MemBrokerServer::DoWatch() {
-//
-//     }
 
     void MemBrokerServer::RunQuery() {
         flatbuffers::FlatBufferBuilder fbb;

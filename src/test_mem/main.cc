@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
 //        return 0;
         MemBrokerOptionsPtr options = Config::Instance()->options();
         x::MMapWriter req_writer;
-        req_writer.Open(options->mem_dir(), "req", 64 << 20, true);
+        req_writer.Open(options->mem_dir(), options->mem_req_file(), kReqMemSize << 20, true);
         MemBrokerServer server;
         shared_ptr<TestBroker> broker = make_shared<TestBroker>();
         server.Init(options, broker);

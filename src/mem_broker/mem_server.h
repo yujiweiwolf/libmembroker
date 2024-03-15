@@ -27,10 +27,10 @@ namespace co {
 
     using namespace std;
 
-    constexpr int64_t kFuncClearTimeoutMessages = -1;
-    constexpr int64_t kFuncUploadAllTradeAsset = -2;
-    constexpr int64_t kFuncUploadAllTradePosition = -3;
-    constexpr int64_t kFuncOnStart = -4; // 断线重连后重置状态
+//    constexpr int64_t kFuncClearTimeoutMessages = -1;
+//    constexpr int64_t kFuncUploadAllTradeAsset = -2;
+//    constexpr int64_t kFuncUploadAllTradePosition = -3;
+//    constexpr int64_t kFuncOnStart = -4; // 断线重连后重置状态
 
     class QueryContext {
     public:
@@ -105,7 +105,7 @@ namespace co {
     public:
         explicit MemBrokerServer();
 
-        void Init(MemBrokerOptionsPtr options, MemBrokerPtr broker);
+        void Init(MemBrokerOptionsPtr option, MemBrokerPtr broker);
         void Start();
         void Join();
         void Run();
@@ -155,22 +155,6 @@ namespace co {
         void DoWatch();
         void RunStream();
         void RunController();
-    protected:
-//        void HandleQueryTradeAssetRep(const std::string& raw);
-//        void HandleQueryTradePositionRep(const std::string& raw);
-//        void HandleQueryTradeKnockRep(const std::string& raw);
-//        void HandleTradeOrderRep(Upstream* upstream, std::string raw);
-//        void HandleTradeWithdrawRep(Upstream* upstream, std::string raw);
-//        void HandleGetTradeMarketAssetRep(Upstream* upstream, const std::string& raw);
-//        void HandleTransferTradeAssetRep(Upstream* upstream, const std::string& raw);
-//
-//        void HandleTradePolicy(const std::string& raw);
-//        void HandleTradeKnock(const std::string& raw);
-//        void HandleRiskMessage(const std::string& raw);
-//        void HandleUploadAllTradeAsset(Upstream* upstream);
-//        void HandleUploadAllTradePosition(Upstream* upstream);
-//        void HandleClearTimeoutMessages();
-//        void HandleOnStart();
 
     private:
         MemBrokerOptionsPtr opt_;
@@ -196,11 +180,10 @@ namespace co {
 
         std::map<std::string, MemTradeAsset> assets_;
         std::map<std::string, std::shared_ptr<std::map<std::string, MemTradePosition>>> positions_; // fund_id -> {code -> obj}
-        std::set<std::string> knocks_;  // fund_id_
+        std::set<std::string> knocks_;
 
         int64_t active_task_timestamp_ = 0; // 正在执行任务的开始时间
         x::MMapWriter inner_writer_;  // 内部使用，1秒钟写一次，供server检查查询与报撤单是否有响应使用
-        int64_t last_write_req_time_ = 0;
         int64_t start_time_ = 0;
     };
 }  // namespace co

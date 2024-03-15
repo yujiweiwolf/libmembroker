@@ -22,7 +22,7 @@ namespace co {
             server_ = server;
             enable_stock_short_selling_ = opt.enable_stock_short_selling();
             request_timeout_ms_ = opt.request_timeout_ms();
-            rep_writer_.Open(opt.mem_dir().c_str(), "rep", 64 << 20, true);
+            rep_writer_.Open(opt.mem_dir(), opt.mem_rep_file(), kRepMemSize << 20, true);
             OnInit();
             LOG_INFO << "initialize broker ok";
         } catch (std::exception& e) {
@@ -30,7 +30,6 @@ namespace co {
             throw e;
         }
     }
-
 
     MemTradeAccount* MemBroker::GetAccount(const string& fund_id) {
         MemTradeAccount* ret = nullptr;
@@ -82,26 +81,26 @@ namespace co {
         server_->PushMemBuffer(function);
     }
 
-    void MemBroker::SendQueryTradeAssetRep(MemTradeAsset* data) {
-        int length = sizeof(MemTradeAsset);
-        void* buffer = rep_writer_.OpenFrame(length);
-        memcpy(buffer, (char*)data, length);
-        rep_writer_.CloseFrame(kMemTypeTradeAsset);
-    }
-
-    void MemBroker::SendQueryTradePositionRep(MemTradePosition* data) {
-        int length = sizeof(MemTradePosition);
-        void* buffer = rep_writer_.OpenFrame(length);
-        memcpy(buffer, (char*)data, length);
-        rep_writer_.CloseFrame(kMemTypeTradePosition);
-    }
-
-    void MemBroker::SendQueryTradeKnockRep(MemTradeKnock* data) {
-        int length = sizeof(MemTradeKnock);
-        void* buffer = rep_writer_.OpenFrame(length);
-        memcpy(buffer, (char*)data, length);
-        rep_writer_.CloseFrame(kMemTypeTradeKnock);
-    }
+//    void MemBroker::SendQueryTradeAssetRep(MemTradeAsset* data) {
+//        int length = sizeof(MemTradeAsset);
+//        void* buffer = rep_writer_.OpenFrame(length);
+//        memcpy(buffer, (char*)data, length);
+//        rep_writer_.CloseFrame(kMemTypeTradeAsset);
+//    }
+//
+//    void MemBroker::SendQueryTradePositionRep(MemTradePosition* data) {
+//        int length = sizeof(MemTradePosition);
+//        void* buffer = rep_writer_.OpenFrame(length);
+//        memcpy(buffer, (char*)data, length);
+//        rep_writer_.CloseFrame(kMemTypeTradePosition);
+//    }
+//
+//    void MemBroker::SendQueryTradeKnockRep(MemTradeKnock* data) {
+//        int length = sizeof(MemTradeKnock);
+//        void* buffer = rep_writer_.OpenFrame(length);
+//        memcpy(buffer, (char*)data, length);
+//        rep_writer_.CloseFrame(kMemTypeTradeKnock);
+//    }
 
     void MemBroker::SendQueryTradeAsset(MemGetTradeAssetMessage* req) {
         OnQueryTradeAsset(req);
@@ -155,11 +154,11 @@ namespace co {
                     order->oc_flag = inner_stock_master_.GetOcFlag(req->fund_id, req->bs_flag, *order);
                     inner_stock_master_.HandleOrderReq(req->fund_id, req->bs_flag, *order);
                 } else if (trade_type == kTradeTypeOption) {
-//                    // 处理期权自动开平仓逻辑：获取自动开平仓标记
-//                    if (oc_flag == kOcFlagAuto) {
-//                        order->oc_flag = inner_option_master_.GetAutoOcFlag(*order);
-//                    }
-//                    inner_option_master_.HandleOrderReq(*order);
+                    // 处理期权自动开平仓逻辑：获取自动开平仓标记
+                    if (oc_flag == kOcFlagAuto) {
+                        order->oc_flag = inner_option_master_.GetAutoOcFlag(req->fund_id, req->bs_flag, *order);
+                    }
+                    inner_option_master_.HandleOrderReq(req->fund_id, req->bs_flag, *order);
                 }
             }
             CheckTimeout(req->timestamp, request_timeout_ms_);
@@ -221,10 +220,9 @@ namespace co {
             if (accout->type == kTradeTypeSpot && enable_stock_short_selling_) {
                 inner_stock_master_.HandleKnock(knock);
             } else if (accout->type == kTradeTypeOption) {
-                // broker_->inner_option_master()->HandleKnock(cur);
+                inner_option_master_.HandleKnock(knock);
             }
         }
-
     }
 
 

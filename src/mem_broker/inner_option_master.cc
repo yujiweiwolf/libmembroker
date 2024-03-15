@@ -272,7 +272,7 @@ namespace co {
         }
     }
 
-    int64_t InnerOptionMaster::GetAutoOcFlag(const co::fbs::TradeOrderT& order) {
+    int64_t InnerOptionMaster::GetAutoOcFlag(const std::string& fund_id, int64_t bs_flag, const MemTradeOrder& order) {
         // 买开（bs_flag=买，oc_flag=自动）:
         // 1.如果有卖方向头寸，则执行：买平；
         // 2.如果没有卖方向头寸或卖方向头寸不足，则执行：买开
@@ -283,9 +283,7 @@ namespace co {
             return order.oc_flag;
         }
         int64_t ret_oc_flag = kOcFlagOpen; // 默认开仓
-        string fund_id = order.fund_id;
         string code = order.code;
-        int64_t bs_flag = order.bs_flag;
         int64_t order_volume = order.volume;
         if (bs_flag != kBsFlagBuy && bs_flag != kBsFlagSell) {
             return ret_oc_flag;

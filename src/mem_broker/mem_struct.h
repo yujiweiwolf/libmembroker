@@ -11,6 +11,10 @@
 #include <boost/asio.hpp>
 #include "coral/coral.h"
 
+//  约定共享内存的大小
+constexpr int64_t kReqMemSize = 64;
+constexpr int64_t kRepMemSize = 64;
+constexpr int64_t kInnerBrokerMemSize = 8;
 
 namespace co {
     struct MemTradeAccount {

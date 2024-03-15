@@ -13,7 +13,7 @@ broker:
 # 一台服务器上， 不管多少个broker, 共用这两块内存
   mem_dir: ../data
   mem_req_file: broker_req
-  mem_rep_file: rep_rtn
+  mem_rep_file: broker_rep
 
 fake:
   accounts:
