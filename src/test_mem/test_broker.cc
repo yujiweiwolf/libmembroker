@@ -161,60 +161,108 @@ namespace co {
                     case kMemTypeQueryTradeAssetReq: {
                         LOG_INFO << "查询资金响应";
                         MemGetTradeAssetMessage* req = (MemGetTradeAssetMessage*)item.second;
-                        int length = sizeof(MemTradeAsset);
+                        // 生成item，再判断每一个是否有效
+                        int total_num = 0;
+                        MemTradeAsset asset;
+                        memset(&asset, 0, sizeof(asset));
+                        asset.timestamp = x::RawDateTime();
+                        strcpy(asset.fund_id, req->fund_id);
+                        asset.balance = 100.0 + req->timestamp % 2;
+                        asset.usable = 123.0;
+                        if (IsNewMemTradeAsset(&asset)) {
+                            total_num++;
+                        }
+                        int length = sizeof(MemGetTradeAssetMessage) + sizeof(MemTradeAsset) * total_num;
                         void* buffer = CreateMemBuffer(length);
-                        MemTradeAsset* rep = (MemTradeAsset*)buffer;
-                        rep->timestamp = x::RawDateTime();
-                        strcpy(rep->fund_id, req->fund_id);
-                        rep->balance = 100.0 + req->timestamp % 2;
-                        rep->usable = 123.0;
+                        MemGetTradeAssetMessage* rep = (MemGetTradeAssetMessage*)buffer;
+                        memcpy(rep, req, sizeof(MemGetTradeAssetMessage));
+                        rep->items_size = total_num;
+                        if (total_num) {
+                            MemTradeAsset* first = (MemTradeAsset*)((char*)buffer + sizeof(MemGetTradeAssetMessage));
+                            for (int i = 0; i < total_num; i++) {
+                                MemTradeAsset* item = first + i;
+                                memcpy(item, &asset, sizeof(MemTradeAsset));
+                            }
+                        }
                         PushMemBuffer(kMemTypeQueryTradeAssetRep);
                         break;
                     }
                     case kMemTypeQueryTradePositionReq: {
                         LOG_INFO << "查询持仓响应";
-                        int total_num = 5;
-                        int length = sizeof(MemGetTradePositionMessage) + sizeof(MemTradePosition) * total_num;
                         MemGetTradePositionMessage* req = (MemGetTradePositionMessage*)item.second;
+                        // 生成item，再判断每一个是否有效
+                        std::vector<MemTradePosition> tmp_pos;
+                        for (int i = 0; i < 5; i++) {
+                            MemTradePosition pos;
+                            pos.timestamp = x::RawDateTime();
+                            strcpy(pos.fund_id, req->fund_id);
+                            sprintf(pos.code, "00000%d.SZ", i);
+                            pos.market = co::kMarketSZ;
+                            pos.long_volume = i * 100 + 10 + req->timestamp % 2;
+                            tmp_pos.push_back(pos);
+                        }
+                        for (auto it = tmp_pos.begin(); it != tmp_pos.end();) {
+                            if (IsNewMemTradePosition(&(*it))) {
+                                ++it;
+                            } else {
+                                tmp_pos.erase(it);
+                            }
+                        }
+                        int total_num = tmp_pos.size();
+                        int length = sizeof(MemGetTradePositionMessage) + sizeof(MemTradePosition) * total_num;
                         void* buffer = CreateMemBuffer(length);
-                        memcpy(buffer, item.second, sizeof(MemGetTradePositionMessage));
                         MemGetTradePositionMessage* rep = (MemGetTradePositionMessage*)buffer;
+                        memcpy(rep, req, sizeof(MemGetTradePositionMessage));
                         rep->items_size = total_num;
-                        MemTradePosition* item = (MemTradePosition*)((char*)buffer + sizeof(MemGetTradePositionMessage));
-                        for (int i = 0; i < total_num; i++) {
-                            MemTradePosition* pos = item + i;
-                            pos->timestamp = x::RawDateTime();
-                            strcpy(pos->fund_id, req->fund_id);
-                            sprintf(pos->code, "00000%d.SZ", i);
-                            pos->market = co::kMarketSZ;
-                            pos->long_volume = i * 100 + 10 + req->timestamp % 2;
+                        if (total_num) {
+                            MemTradePosition *first = (MemTradePosition * )((char *)buffer + sizeof(MemGetTradePositionMessage));
+                            for (int i = 0; i < total_num; i++) {
+                                MemTradePosition *pos = first + i;
+                                memcpy(pos, &tmp_pos[i], sizeof(MemTradePosition));
+                            }
                         }
                         PushMemBuffer(kMemTypeQueryTradePositionRep);
                         break;
                     }
                     case kMemTypeQueryTradeKnockReq: {
                         LOG_INFO << "查询成交响应";
-                        int total_num = 3;
-                        int length = sizeof(MemGetTradeKnockMessage) + sizeof(MemTradeKnock) * total_num;
                         MemGetTradeKnockMessage* req = (MemGetTradeKnockMessage*)item.second;
+                        std::vector<MemTradeKnock> tmp_knock;
+                        for (int i = 0; i < 5; i++) {
+                            MemTradeKnock knock;
+                            memset(&knock, 0, sizeof(knock));
+                            knock.timestamp = x::RawDateTime();
+                            strcpy(knock.fund_id, req->fund_id);
+                            strcpy(knock.batch_no, "batch_no_123");
+                            sprintf(knock.code, "00000%d.SZ", i);
+                            sprintf(knock.order_no, "order_no_%ld", knock.timestamp % 13);
+                            sprintf(knock.match_no, "match_no_%ld", i + req->timestamp % 2 * 100);
+                            knock.bs_flag = 1;
+                            knock.match_volume = i * 100 + 100;
+                            knock.match_type = 1;
+                            knock.match_price = 10 + 0.01 * i;
+                            knock.match_amount = knock.match_volume * knock.match_volume;
+                            tmp_knock.push_back(knock);
+                        }
+                        for (auto it = tmp_knock.begin(); it != tmp_knock.end();) {
+                            if (IsNewMemTradeKnock(&(*it))) {
+                                ++it;
+                            } else {
+                                tmp_knock.erase(it);
+                            }
+                        }
+                        int total_num = tmp_knock.size();
+                        int length = sizeof(MemGetTradeKnockMessage) + sizeof(MemTradeKnock) * total_num;
                         void* buffer = CreateMemBuffer(length);
-                        memcpy(buffer, item.second, sizeof(MemGetTradeKnockMessage));
                         MemGetTradeKnockMessage* rep = (MemGetTradeKnockMessage*)buffer;
+                        memcpy(rep, req, sizeof(MemGetTradeKnockMessage));
                         rep->items_size = total_num;
-                        MemTradeKnock* item = (MemTradeKnock*)((char*)buffer + sizeof(MemGetTradeKnockMessage));
-                        for (int i = 0; i < total_num; i++) {
-                            MemTradeKnock* knock = item + i;;
-                            knock->timestamp = x::RawDateTime();
-                            strcpy(knock->fund_id, req->fund_id);
-                            strcpy(knock->batch_no, "batch_no_123");
-                            sprintf(knock->code, "00000%d.SZ", i);
-                            sprintf(knock->order_no, "order_no_%d", i);
-                            sprintf(knock->match_no, "match_no_%d", i + req->timestamp % 2 * 100);
-                            knock->bs_flag = 1;
-                            knock->match_volume = i * 100 + 100;
-                            knock->match_type = 1;
-                            knock->match_price = 10 + 0.01 * i;
-                            knock->match_amount = knock->match_volume * knock->match_volume;
+                        if (total_num) {
+                            MemTradeKnock* first = (MemTradeKnock*)((char*)buffer + sizeof(MemGetTradeKnockMessage));
+                            for (int i = 0; i < total_num; i++) {
+                                MemTradeKnock* knock = first + i;;
+                                memcpy(knock, &tmp_knock[i], sizeof(MemTradeKnock));
+                            }
                         }
                         PushMemBuffer(kMemTypeQueryTradeKnockRep);
                         break;

@@ -39,10 +39,8 @@ namespace co {
 
     private:
         static Config* instance_;
-
         MemBrokerOptionsPtr options_;
-
         std::map<std::string, std::shared_ptr<MemTradeAccount>> accounts_;
+        // std::map<std::string, std::unique_ptr<co::fbs::TradeRouteT>> routes_;
     };
-
 }

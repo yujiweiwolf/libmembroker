@@ -24,14 +24,7 @@
 #include "upstream.h"
 
 namespace co {
-
     using namespace std;
-
-//    constexpr int64_t kFuncClearTimeoutMessages = -1;
-//    constexpr int64_t kFuncUploadAllTradeAsset = -2;
-//    constexpr int64_t kFuncUploadAllTradePosition = -3;
-//    constexpr int64_t kFuncOnStart = -4; // 断线重连后重置状态
-
     class QueryContext {
     public:
         inline std::string fund_id() const {
@@ -111,8 +104,8 @@ namespace co {
         void Run();
 
         bool ExitAccout(const string& fund_id);
-        void* CreateMemBuffer(int length);
-        void PushMemBuffer(int function);
+//        void* CreateMemBuffer(int length);
+//        void PushMemBuffer(int function);
         void BeginTask();
         void EndTask();
 
@@ -128,7 +121,7 @@ namespace co {
         bool IsNewMemTradePosition(MemTradePosition* pos);
         bool IsNewMemTradeKnock(MemTradeKnock* knock);
 
-        void SendQueryTradeAssetRep(MemTradeAsset* rep);
+        void SendQueryTradeAssetRep(MemGetTradeAssetMessage* rep);
         void SendQueryTradePositionRep(MemGetTradePositionMessage* rep);
         void SendQueryTradeKnockRep(MemGetTradeKnockMessage* rep);
         void SendTradeOrderRep(MemTradeOrderMessage* rep);
@@ -185,6 +178,7 @@ namespace co {
         int64_t active_task_timestamp_ = 0; // 正在执行任务的开始时间
         x::MMapWriter inner_writer_;  // 内部使用，1秒钟写一次，供server检查查询与报撤单是否有响应使用
         int64_t start_time_ = 0;
+        int64_t wait_size_ = 0;  // 待处理的消息队列
     };
 }  // namespace co
 

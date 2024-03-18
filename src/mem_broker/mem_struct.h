@@ -18,37 +18,39 @@ constexpr int64_t kInnerBrokerMemSize = 8;
 
 namespace co {
     struct MemTradeAccount {
-        char fund_id[64];
+        char fund_id[kMemFundIdSize]; // 资金账号
         int64_t timestamp = 0;
-        char name[64];
+        char name[128];
         int64_t type = 0;
         int64_t batch_order_size = 0;
         bool disabled = false;
         bool enable_trader = false;
         bool enable_researcher = false;
         bool enable_risker = false;
-        char market[128];
+        int64_t market;
     };
 
     struct MemGetTradeAssetMessage {
-        char id[64];
+        char id[kMemIdSize]; // 消息编号
         int64_t timestamp = 0;
-        char fund_id[64];
+        char fund_id[kMemFundIdSize]; // 资金账号
+        int64_t items_size;
+        char error[kMemErrorSize];
     };
 
     struct MemGetTradePositionMessage {
-        char id[64];
+        char id[kMemIdSize]; // 消息编号
         int64_t timestamp = 0;
-        char fund_id[64];
+        char fund_id[kMemFundIdSize]; // 资金账号
         char cursor[128];
         int64_t items_size;
         char error[kMemErrorSize];
     };
 
     struct MemGetTradeKnockMessage {
-        char id[64];
+        char id[kMemIdSize]; // 消息编号
         int64_t timestamp = 0;
-        char fund_id[64];
+        char fund_id[kMemFundIdSize]; // 资金账号
         char cursor[128];
         char next_cursor[128];
         int64_t items_size;
@@ -56,7 +58,7 @@ namespace co {
     };
 
     struct HeartBeatMessage {
-        char fund_id[64];
+        char fund_id[kMemFundIdSize]; // 资金账号
         int64_t timestamp = 0;
     };
 
@@ -66,6 +68,6 @@ namespace co {
     constexpr int kMemTypeQueryTradePositionRep = 6400004;
     constexpr int kMemTypeQueryTradeKnockReq = 6400005;
     constexpr int kMemTypeQueryTradeKnockRep = 6400006;
-    constexpr int kMemTypeRtnTradeKnock = 6400007;
+//     constexpr int kMemTypeRtnTradeKnock = 6400007;
     constexpr int kMemTypeHeartBeat = 6400008;
 }    // namespace co

@@ -77,7 +77,7 @@ namespace co {
         std::vector<std::string> stock_fund_ids;
         std::vector<std::string> option_fund_ids;
         for (auto& itr : accounts) {
-            auto acc = itr.second; // co::fbs::TradeAccountT*
+            auto acc = itr.second;
             if (acc.type == kTradeTypeSpot) {
                 stock_fund_ids.push_back(acc.fund_id);
             } else if (acc.type == kTradeTypeOption) {
@@ -173,6 +173,7 @@ namespace co {
                     inner_writer_.CloseFrame(kMemTypeQueryTradeAssetReq);
                 }
             }
+
             for (auto& itr : position_contexts_) {
                 auto ctx = itr.second;
                 int64_t max_time = ctx->rep_time() >= ctx->req_time() ?
@@ -190,6 +191,7 @@ namespace co {
                     inner_writer_.CloseFrame(kMemTypeQueryTradePositionReq);
                 }
             }
+
             for (auto& itr : knock_contexts_) {
                 auto ctx = itr.second;
                 std::string next_cursor = ctx->next_cursor();
@@ -218,14 +220,23 @@ namespace co {
 
     // 请求转发给broker
     void  MemBrokerServer::SendQueryTradeAsset(MemGetTradeAssetMessage* req) {
+        wait_size_++;
+        int64_t ms = x::SubRawDateTime(x::RawDateTime(), req->timestamp);
+        LOG_INFO << "[REQ][Q=" << wait_size_ << "] query asset: req_delay = " << ms << "ms";
         broker_->SendQueryTradeAsset(req);
     }
 
     void  MemBrokerServer::SendQueryTradePosition(MemGetTradePositionMessage* req) {
+        wait_size_++;
+        int64_t ms = x::SubRawDateTime(x::RawDateTime(), req->timestamp);
+        LOG_INFO << "[REQ][Q=" << wait_size_ << "] query position: req_delay = " << ms << "ms";
         broker_->SendQueryTradePosition(req);
     }
 
     void  MemBrokerServer::SendQueryTradeKnock(MemGetTradeKnockMessage* req) {
+        wait_size_++;
+        int64_t ms = x::SubRawDateTime(x::RawDateTime(), req->timestamp);
+        LOG_INFO << "[REQ][Q=" << wait_size_ << "] query knock: req_delay = " << ms << "ms";
         broker_->SendQueryTradeKnock(req);
     }
 
@@ -313,7 +324,7 @@ namespace co {
      }
 
     // 处理api的响应
-    void MemBrokerServer::SendQueryTradeAssetRep(MemTradeAsset* rep) {
+    void MemBrokerServer::SendQueryTradeAssetRep(MemGetTradeAssetMessage* rep) {
          // 之前的数据
          if (start_time_ > rep->timestamp) {
             return;
@@ -333,15 +344,19 @@ namespace co {
                 ctx->set_last_success_time(now);
             }
         }
-        LOG_INFO << "[DATA][ASSET] update asset: fund_id: " << fund_id
-                 << ", timestamp: " << rep->timestamp
-                 << ", balance: " << rep->balance
-                 << ", usable: " << rep->usable
-                 << ", margin: " << rep->margin
-                 << ", equity: " << rep->equity
-                 << ", long_margin_usable: " << rep->long_margin_usable
-                 << ", short_margin_usable: " << rep->short_margin_usable
-                 << ", short_return_usable: " << rep->short_return_usable;
+        auto first = (MemTradeAsset*)((char*)rep + sizeof(MemGetTradeAssetMessage));
+        for (int i = 0; i < rep->items_size; i++) {
+            MemTradeAsset *asset = first + i;
+            LOG_INFO << "[DATA][ASSET] update asset: fund_id: " << fund_id
+                     << ", timestamp: " << asset->timestamp
+                     << ", balance: " << asset->balance
+                     << ", usable: " << asset->usable
+                     << ", margin: " << asset->margin
+                     << ", equity: " << asset->equity
+                     << ", long_margin_usable: " << asset->long_margin_usable
+                     << ", short_margin_usable: " << asset->short_margin_usable
+                     << ", short_return_usable: " << asset->short_return_usable;
+        }
     }
 
     void MemBrokerServer::SendQueryTradePositionRep(MemGetTradePositionMessage* rep) {

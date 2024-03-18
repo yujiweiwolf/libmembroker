@@ -36,9 +36,9 @@ namespace co {
         string option_fund_id_;
         int order_no_index_ = 0;
         int batch_no_index_ = 0;
-        std::mutex mutex_;
-        std::shared_ptr<std::thread> rep_thread_ = nullptr;
-        std::unordered_map<std::string, std::pair<int64_t, void*>> all_req_;
 
+        std::shared_ptr<std::thread> rep_thread_ = nullptr;
+        std::mutex mutex_;
+        std::unordered_map<std::string, std::pair<int64_t, void*>> all_req_;
     };
 }

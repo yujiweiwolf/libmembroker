@@ -70,6 +70,7 @@ namespace co {
             //////
             while (true) {
                 int32_t type = common_reader_.Read(&data);
+
                 if (type == kMemTypeTradeOrderRep) {
                     MemTradeOrderMessage* msg = (MemTradeOrderMessage*) data;
                     server_->SendTradeOrderRep(msg);
@@ -80,7 +81,7 @@ namespace co {
                     MemTradeKnock* msg = (MemTradeKnock*) data;
                     server_->SendTradeKnock(msg);
                 } else if (type == kMemTypeQueryTradeAssetRep) {
-                    MemTradeAsset* msg = (MemTradeAsset*) data;
+                    MemGetTradeAssetMessage* msg = (MemGetTradeAssetMessage*) data;
                     server_->SendQueryTradeAssetRep(msg);
                 } else if (type == kMemTypeQueryTradePositionRep) {
                     MemGetTradePositionMessage* msg = (MemGetTradePositionMessage*) data;
@@ -88,9 +89,6 @@ namespace co {
                 } else if (type == kMemTypeQueryTradeKnockRep) {
                     MemGetTradeKnockMessage* msg = (MemGetTradeKnockMessage*) data;
                     server_->SendQueryTradeKnockRep(msg);
-                } else if (type == kMemTypeRtnTradeKnock) {
-                    MemTradeKnock* knock = (MemTradeKnock*) data;
-                    server_->SendTradeKnock(knock);
                 } else if (type == kMemTypeHeartBeat) {
                     server_->SendHeartBeat();
                 } else if (type == kMemTypeQueryTradeAssetReq) {

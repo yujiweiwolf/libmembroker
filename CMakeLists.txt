@@ -66,10 +66,10 @@ set(CMAKE_BUILD_TYPE "Debug")
 aux_source_directory (./src/mem_broker LIB_LIST)
 add_library (membroker ${LIB_LIST})
 
-#aux_source_directory (./src/test_mem MEM_TEST_LIST)
-#add_executable(mem_test ${MEM_TEST_LIST})
-#target_link_libraries(mem_test
-#        membroker coral swordfish x stdc++fs yaml-cpp  clickhouse-cpp-lib-static boost_date_time boost_filesystem boost_regex boost_system  boost_chrono boost_log boost_program_options boost_thread boost_iostreams boost_context boost_coroutine z protobuf protobuf-lite sodium zmq ssl crypto iconv pthread dl)
+aux_source_directory (./src/test_mem MEM_TEST_LIST)
+add_executable(mem_test ${MEM_TEST_LIST})
+target_link_libraries(mem_test
+        membroker coral swordfish x stdc++fs yaml-cpp  clickhouse-cpp-lib-static boost_date_time boost_filesystem boost_regex boost_system  boost_chrono boost_log boost_program_options boost_thread boost_iostreams boost_context boost_coroutine z protobuf protobuf-lite sodium zmq ssl crypto iconv pthread dl)
 
 
 

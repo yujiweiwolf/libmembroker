@@ -53,13 +53,18 @@ class MemBroker {
     // 自动开平， 启始化时查询持仓
     void OnStart();
 
-    void* CreateMemBuffer(int length);
+    void* CreateMemBuffer(int64_t length);
 
-    void PushMemBuffer(int function);
+    void PushMemBuffer(int64_t function);
 
 //        void SendQueryTradeAssetRep(MemTradeAsset* data);
 //        void SendQueryTradePositionRep(MemTradePosition* data);
 //        void SendQueryTradeKnockRep(MemTradeKnock* data);
+
+    // broker中的查询，回写共享内存前，先判断
+    bool IsNewMemTradeAsset(MemTradeAsset* asset);
+    bool IsNewMemTradePosition(MemTradePosition* pos);
+    bool IsNewMemTradeKnock(MemTradeKnock* knock);
 
  protected:
     /**
