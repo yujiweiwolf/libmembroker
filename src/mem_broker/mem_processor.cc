@@ -20,7 +20,7 @@ namespace co {
         string mem_dir = opt.mem_dir();
         string req_mem_file = opt.mem_req_file();
         string rep_mem_file = opt.mem_rep_file();
-        string inner_broker_file = "inner_broker";
+        string inner_broker_file = kInnerBrokerFile;
         cpu_affinity_ = opt.cpu_affinity();
 
         consume_reader_.Open(mem_dir, req_mem_file, true);
@@ -63,7 +63,7 @@ namespace co {
                     LOG_INFO << "type: " << type;
                     MemTradeWithdrawMessage* msg = (MemTradeWithdrawMessage*) data;
                     server_->SendTradeWithdraw(msg);
-                } else {
+                } else if (type == 0) {
                     break;
                 }
             }
@@ -89,7 +89,7 @@ namespace co {
                 } else if (type == kMemTypeQueryTradeKnockRep) {
                     MemGetTradeKnockMessage* msg = (MemGetTradeKnockMessage*) data;
                     server_->SendQueryTradeKnockRep(msg);
-                } else if (type == kMemTypeHeartBeat) {
+                } else if (type == kMemTypeInnerHeartBeat) {
                     server_->SendHeartBeat();
                 } else if (type == kMemTypeQueryTradeAssetReq) {
                     MemGetTradeAssetMessage* msg = (MemGetTradeAssetMessage*) data;

@@ -22,7 +22,7 @@ namespace co {
                 MemTradePosition *position = first + i;
                 string code = position->code;
                 int64_t long_volume = position->long_can_close;
-                int64_t short_volume = position->short_can_close;
+                int64_t short_volume = position->short_can_open;
                 if (long_volume > 0) {
                     InnerOptionPositionPtr pos = GetOrCreatePosition(fund_id, code, kBsFlagBuy);
                     pos->set_td_volume(long_volume);

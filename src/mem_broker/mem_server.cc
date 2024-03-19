@@ -13,7 +13,7 @@ namespace co {
 
     void MemBrokerServer::Init(MemBrokerOptionsPtr option, MemBrokerPtr broker) {
         opt_ = option;
-        broker->Init(*option, this);
+//         broker->Init(*option, this);
         x::Sleep(1000);
         broker_ = broker;
         processor_ = std::make_shared<MemProcessor>(this);
@@ -38,9 +38,11 @@ namespace co {
         if (!broker_) {
             throw std::runtime_error("broker is required, please initialize broker server before starting");
         }
-        auto begin_time = x::Timestamp();
-        string inner_broker_file = "inner_broker";
+
+        string inner_broker_file = kInnerBrokerFile;
         inner_writer_.Open("../data", inner_broker_file.c_str(), kInnerBrokerMemSize << 20, true);
+
+        broker_->Init(*opt_, this);
 
         enable_upload_asset_ = opt_->enable_upload() && opt_->query_asset_interval_ms() > 0;
         enable_upload_position_ = opt_->enable_upload() && opt_->query_position_interval_ms() > 0;
@@ -151,9 +153,9 @@ namespace co {
         if (asset_contexts_.empty() && position_contexts_.empty() && knock_contexts_.empty()) {
             return;
         }
-        int64_t asset_timeout_ms = query_asset_ms < 10000 ? 10000 : 3 * query_asset_ms;
-        int64_t position_timeout_ms = query_position_ms < 10000 ? 10000 : 3 * query_position_ms;
-        int64_t knock_timeout_ms = query_knock_ms < 10000 ? 10000 : 3 * query_knock_ms;
+        int64_t asset_timeout_ms = query_asset_ms < 5000 ? 5000 : query_asset_ms;
+        int64_t position_timeout_ms = query_position_ms < 10000 ? 10000 : query_position_ms;
+        int64_t knock_timeout_ms = query_knock_ms < 10000 ? 10000 : query_knock_ms;
         while (true) {
             x::Sleep(100);
             int64_t now = x::Timestamp();
@@ -200,6 +202,8 @@ namespace co {
                     must_query = true;
                 }
                 int64_t max_time = ctx->rep_time() >= ctx->req_time() ? ctx->rep_time() : ctx->req_time();
+//                LOG_INFO << "req_time: " << ctx->req_time() << ", rep_time: " << ctx->rep_time()
+//                << ", now: " << now << ", diff: " << now - max_time << ", knock_timeout_ms: " << knock_timeout_ms;
                 bool active = ctx->rep_time() < ctx->req_time() ? true : false;
                 if ((!active && now - max_time >= knock_timeout_ms) || now - max_time >= knock_timeout_ms || must_query) {
                     ctx->set_req_time(now);
@@ -219,14 +223,14 @@ namespace co {
     }
 
     // 请求转发给broker
-    void  MemBrokerServer::SendQueryTradeAsset(MemGetTradeAssetMessage* req) {
+    void MemBrokerServer::SendQueryTradeAsset(MemGetTradeAssetMessage* req) {
         wait_size_++;
         int64_t ms = x::SubRawDateTime(x::RawDateTime(), req->timestamp);
         LOG_INFO << "[REQ][Q=" << wait_size_ << "] query asset: req_delay = " << ms << "ms";
         broker_->SendQueryTradeAsset(req);
     }
 
-    void  MemBrokerServer::SendQueryTradePosition(MemGetTradePositionMessage* req) {
+    void MemBrokerServer::SendQueryTradePosition(MemGetTradePositionMessage* req) {
         wait_size_++;
         int64_t ms = x::SubRawDateTime(x::RawDateTime(), req->timestamp);
         LOG_INFO << "[REQ][Q=" << wait_size_ << "] query position: req_delay = " << ms << "ms";
@@ -240,11 +244,14 @@ namespace co {
         broker_->SendQueryTradeKnock(req);
     }
 
-    void  MemBrokerServer::SendTradeOrder(MemTradeOrderMessage* req) {
+    void MemBrokerServer::SendTradeOrder(MemTradeOrderMessage* req) {
+        wait_size_++;
+        int64_t ms = x::SubRawDateTime(x::RawDateTime(), req->timestamp);
+        LOG_INFO << "[REQ][Q=" << wait_size_ << "] query knock: req_delay = " << ms << "ms";
         broker_->SendTradeOrder(req);
     }
 
-    void  MemBrokerServer::SendTradeWithdraw(MemTradeWithdrawMessage* req) {
+    void MemBrokerServer::SendTradeWithdraw(MemTradeWithdrawMessage* req) {
         broker_->SendTradeWithdraw(req);
     }
 
@@ -344,6 +351,13 @@ namespace co {
                 ctx->set_last_success_time(now);
             }
         }
+        wait_size_--;
+        if (!error.empty()) {
+            x::Error([=]() {
+                LOG_ERROR << "[REP]query asset failed in " << ms << "ms: " << error;
+            });
+            return;
+        }
         auto first = (MemTradeAsset*)((char*)rep + sizeof(MemGetTradeAssetMessage));
         for (int i = 0; i < rep->items_size; i++) {
             MemTradeAsset *asset = first + i;
@@ -385,6 +399,13 @@ namespace co {
             return;
         } else if (x::StartsWith(id, "INIT_STOCK_")) {
             broker_->inner_stock_master()->SetInitPositions(rep);
+            return;
+        }
+        wait_size_--;
+        if (!error.empty()) {
+            x::Error([=]() {
+                LOG_ERROR << "[REP]query position failed in " << ms << "ms: " << error;
+            });
             return;
         }
         auto positions = (MemTradePosition*)((char*)rep + sizeof(MemGetTradePositionMessage));
@@ -434,13 +455,13 @@ namespace co {
                 ctx->set_next_cursor(next_cursor);
             }
         }
+        wait_size_--;
         if (!error.empty()) {
             x::Error([=]() {
                 LOG_ERROR << "[REP]query knock failed in " << ms << "ms: " << error;
             });
             return;
         }
-
         for (int i = 0; i < rep->items_size; i++) {
             MemTradeKnock *knock = item + i;
             if (IsNewMemTradeKnock(knock)) {
@@ -521,14 +542,14 @@ namespace co {
     }
 
     void  MemBrokerServer::RunWatch() {
-        int64_t watch_interval_ms = 1000;
+        int64_t watch_interval_ms = 10000;
         while (true) {
             x::Sleep(watch_interval_ms);
             int length = sizeof(HeartBeatMessage);
             void* buffer = inner_writer_.OpenFrame(length);
             HeartBeatMessage* msg = (HeartBeatMessage*)buffer;
             msg->timestamp = x::RawDateTime();
-            inner_writer_.CloseFrame(kMemTypeHeartBeat);
+            inner_writer_.CloseFrame(kMemTypeInnerHeartBeat);
         }
     }
 

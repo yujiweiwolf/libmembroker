@@ -264,6 +264,7 @@ namespace co {
     }
 
     void MemBroker::SendHeartBeat() {
+        LOG_INFO << "SendHeartBeat, " << x::RawDateTime();
         for (auto it = accounts_.begin(); it != accounts_.end(); ++it) {
             int length = sizeof(HeartBeatMessage);
             void* buffer = rep_writer_.OpenFrame(length);

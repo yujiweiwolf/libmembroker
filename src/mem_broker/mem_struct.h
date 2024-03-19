@@ -15,6 +15,7 @@
 constexpr int64_t kReqMemSize = 64;
 constexpr int64_t kRepMemSize = 64;
 constexpr int64_t kInnerBrokerMemSize = 8;
+const char kInnerBrokerFile[] = "inner_broker";
 
 namespace co {
     struct MemTradeAccount {
@@ -68,6 +69,6 @@ namespace co {
     constexpr int kMemTypeQueryTradePositionRep = 6400004;
     constexpr int kMemTypeQueryTradeKnockReq = 6400005;
     constexpr int kMemTypeQueryTradeKnockRep = 6400006;
-//     constexpr int kMemTypeRtnTradeKnock = 6400007;
+    constexpr int kMemTypeInnerHeartBeat = 6400007;
     constexpr int kMemTypeHeartBeat = 6400008;
 }    // namespace co

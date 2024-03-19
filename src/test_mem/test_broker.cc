@@ -1,6 +1,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <ctime>
 
 #include "test_broker.h"
 #include "config.h"
@@ -9,6 +10,7 @@ namespace co {
 
     void TestBroker::OnInit() {
         LOG_INFO << "initialize FakeBroker ...";
+        srand(time(0));
         order_no_index_ = x::RawTime();
         batch_no_index_ = x::RawDate();
         auto accounts = Config::Instance()->accounts();
@@ -168,7 +170,7 @@ namespace co {
                         asset.timestamp = x::RawDateTime();
                         strcpy(asset.fund_id, req->fund_id);
                         asset.balance = 100.0 + req->timestamp % 2;
-                        asset.usable = 123.0;
+                        asset.usable = 23.0;
                         if (IsNewMemTradeAsset(&asset)) {
                             total_num++;
                         }
@@ -196,9 +198,11 @@ namespace co {
                             MemTradePosition pos;
                             pos.timestamp = x::RawDateTime();
                             strcpy(pos.fund_id, req->fund_id);
-                            sprintf(pos.code, "00000%d.SZ", i);
+                            sprintf(pos.code, "00000%d.SZ", i + 1);
                             pos.market = co::kMarketSZ;
-                            pos.long_volume = i * 100 + 10 + req->timestamp % 2;
+                            pos.long_volume = i * 100 + rand() % 37 + 100;
+                            pos.long_can_close = pos.long_volume - 100;
+                            // pos.short_can_open = rand() % 37;
                             tmp_pos.push_back(pos);
                         }
                         for (auto it = tmp_pos.begin(); it != tmp_pos.end();) {
@@ -228,13 +232,13 @@ namespace co {
                         LOG_INFO << "查询成交响应";
                         MemGetTradeKnockMessage* req = (MemGetTradeKnockMessage*)item.second;
                         std::vector<MemTradeKnock> tmp_knock;
-                        for (int i = 0; i < 5; i++) {
+                        for (int i = 0; i < 3; i++) {
                             MemTradeKnock knock;
                             memset(&knock, 0, sizeof(knock));
                             knock.timestamp = x::RawDateTime();
                             strcpy(knock.fund_id, req->fund_id);
-                            strcpy(knock.batch_no, "batch_no_123");
-                            sprintf(knock.code, "00000%d.SZ", i);
+                            // strcpy(knock.batch_no, "batch_no_123");
+                            sprintf(knock.code, "00000%d.SZ", i + 1);
                             sprintf(knock.order_no, "order_no_%ld", knock.timestamp % 13);
                             sprintf(knock.match_no, "match_no_%ld", i + req->timestamp % 2 * 100);
                             knock.bs_flag = 1;
