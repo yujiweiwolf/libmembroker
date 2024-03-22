@@ -89,8 +89,8 @@ namespace co {
                 } else if (type == kMemTypeQueryTradeKnockRep) {
                     MemGetTradeKnockMessage* msg = (MemGetTradeKnockMessage*) data;
                     server_->SendQueryTradeKnockRep(msg);
-                } else if (type == kMemTypeInnerHeartBeat) {
-                    server_->SendHeartBeat();
+                } else if (type == kMemTypeInnerCyclicSignal) {
+                    server_->HandInnerCyclicSignal();
                 } else if (type == kMemTypeQueryTradeAssetReq) {
                     MemGetTradeAssetMessage* msg = (MemGetTradeAssetMessage*) data;
                     server_->SendQueryTradeAsset(msg);

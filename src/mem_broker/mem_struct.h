@@ -69,6 +69,6 @@ namespace co {
     constexpr int kMemTypeQueryTradePositionRep = 6400004;
     constexpr int kMemTypeQueryTradeKnockReq = 6400005;
     constexpr int kMemTypeQueryTradeKnockRep = 6400006;
-    constexpr int kMemTypeInnerHeartBeat = 6400007;
+    constexpr int kMemTypeInnerCyclicSignal = 6400007;
     constexpr int kMemTypeHeartBeat = 6400008;
 }    // namespace co

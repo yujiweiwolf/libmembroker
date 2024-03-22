@@ -113,7 +113,7 @@ namespace co {
                         void* buffer = rep_writer_.OpenFrame(length);
                         memcpy(buffer, rep, length);
                         rep_writer_.CloseFrame(kMemTypeTradeOrderRep);
-                        x::Sleep(100);
+                        x::Sleep(1000);
                         {
                             for (int i = 0; i < rep->items_size; i++) {
                                 MemTradeOrder* order = items + i;
@@ -149,15 +149,15 @@ namespace co {
                     }
                     case kMemTypeTradeWithdrawReq: {
                         LOG_INFO << "回写撤单回报";
-                        int length = sizeof(MemTradeWithdrawMessage);
-                        void* buffer = rep_writer_.OpenFrame(length);
-                        memcpy(buffer, item.second, length);
-                        MemTradeWithdrawMessage* rep = (MemTradeWithdrawMessage*)buffer;
-                        rep->rep_time = x::RawDateTime();
-                        if (rep->rep_time % 2 == 0) {
-                            strcpy(rep->error, "撤单错误，报单已成交");
-                        }
-                        rep_writer_.CloseFrame(kMemTypeTradeWithdrawRep);
+//                        int length = sizeof(MemTradeWithdrawMessage);
+//                        void* buffer = rep_writer_.OpenFrame(length);
+//                        memcpy(buffer, item.second, length);
+//                        MemTradeWithdrawMessage* rep = (MemTradeWithdrawMessage*)buffer;
+//                        rep->rep_time = x::RawDateTime();
+//                        if (rep->rep_time % 2 == 0) {
+//                            strcpy(rep->error, "撤单错误，报单已成交");
+//                        }
+//                        rep_writer_.CloseFrame(kMemTypeTradeWithdrawRep);
                         break;
                     }
                     case kMemTypeQueryTradeAssetReq: {

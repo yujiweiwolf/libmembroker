@@ -114,7 +114,8 @@ namespace co {
         void SendQueryTradeKnock(MemGetTradeKnockMessage* req);
         void SendTradeOrder(MemTradeOrderMessage* req);
         void SendTradeWithdraw(MemTradeWithdrawMessage* req);
-        void SendHeartBeat();
+        void HandInnerCyclicSignal();
+        void HandleClearTimeoutMessages(int64_t& now);
 
         // broker中的查询，回写共享内存前，先判断
         bool IsNewMemTradeAsset(MemTradeAsset* asset);
@@ -178,7 +179,13 @@ namespace co {
         int64_t active_task_timestamp_ = 0; // 正在执行任务的开始时间
         x::MMapWriter inner_writer_;  // 内部使用，1秒钟写一次，供server检查查询与报撤单是否有响应使用
         int64_t start_time_ = 0;
-        int64_t wait_size_ = 0;  // 待处理的消息队列
+        int64_t wait_size_ = 0;  // 查询待处理的消息队列
+        int64_t last_heart_beat_ = 0;
+//        int64_t withdraw_wait_size_ = 0;
+
+        std::unordered_map<std::string, int64_t> pending_orders_;
+        std::unordered_map<std::string, int64_t> pending_withdraws_;
+
     };
 }  // namespace co
 

@@ -13,7 +13,7 @@ namespace po = boost::program_options;
 const char fund_id[] = "S1";
 
 void write_order(x::MMapWriter* writer) {
-    int total_order_num = 10;
+    int total_order_num = 1;
     string id = x::UUID();
     void* buffer = writer->OpenFrame(sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * total_order_num);
     MemTradeOrderMessage* msg = (MemTradeOrderMessage*) buffer;
@@ -28,11 +28,10 @@ void write_order(x::MMapWriter* writer) {
         order->volume = 100 * ( i + 1);
         order->price = 10 + 0.01 * i;
         order->price_type = kQOrderTypeLimit;
-        sprintf(order->code, "00000%d.SZ", i);
+        sprintf(order->code, "00000%d.SZ", i + 1);
     }
     writer->CloseFrame(kMemTypeTradeOrderReq);
 }
-
 
 void write_withdraw(x::MMapWriter* writer) {
     string id = x::UUID();

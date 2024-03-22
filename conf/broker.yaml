@@ -2,9 +2,9 @@ broker:
   trade_gateway: tcp://xmac:9801?cluster_token=e10adc3949ba59abbe56e057f20f883e
   wal: wal:///../data/trade.broker.wal?keep=5
   enable_upload: true
-  query_asset_interval_ms: 10000
-  query_position_interval_ms: 10000
-  query_knock_interval_ms: 10000
+  query_asset_interval_ms: 0
+  query_position_interval_ms: 0
+  query_knock_interval_ms: 0
   request_timeout_ms: 5000
   enable_query_only: false
   enable_stock_short_selling: false

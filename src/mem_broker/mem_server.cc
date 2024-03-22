@@ -226,38 +226,95 @@ namespace co {
     void MemBrokerServer::SendQueryTradeAsset(MemGetTradeAssetMessage* req) {
         wait_size_++;
         int64_t ms = x::SubRawDateTime(x::RawDateTime(), req->timestamp);
-        LOG_INFO << "[REQ][Q=" << wait_size_ << "] query asset: req_delay = " << ms << "ms";
+        LOG_INFO << "[REQ][WaitRep=" << wait_size_ << "] query asset: req_delay = " << ms << "ms";
         broker_->SendQueryTradeAsset(req);
     }
 
     void MemBrokerServer::SendQueryTradePosition(MemGetTradePositionMessage* req) {
         wait_size_++;
         int64_t ms = x::SubRawDateTime(x::RawDateTime(), req->timestamp);
-        LOG_INFO << "[REQ][Q=" << wait_size_ << "] query position: req_delay = " << ms << "ms";
+        LOG_INFO << "[REQ][WaitRep=" << wait_size_ << "] query position: req_delay = " << ms << "ms";
         broker_->SendQueryTradePosition(req);
     }
 
     void  MemBrokerServer::SendQueryTradeKnock(MemGetTradeKnockMessage* req) {
         wait_size_++;
         int64_t ms = x::SubRawDateTime(x::RawDateTime(), req->timestamp);
-        LOG_INFO << "[REQ][Q=" << wait_size_ << "] query knock: req_delay = " << ms << "ms";
+        LOG_INFO << "[REQ][WaitRep=" << wait_size_ << "] query knock: req_delay = " << ms << "ms";
         broker_->SendQueryTradeKnock(req);
     }
 
     void MemBrokerServer::SendTradeOrder(MemTradeOrderMessage* req) {
-        wait_size_++;
-        int64_t ms = x::SubRawDateTime(x::RawDateTime(), req->timestamp);
-        LOG_INFO << "[REQ][Q=" << wait_size_ << "] query knock: req_delay = " << ms << "ms";
+        int64_t now = x::RawDateTime();
+        int64_t ms = x::SubRawDateTime(now, req->timestamp);
+        pending_orders_.insert(std::make_pair(req->id, now));
+        LOG_INFO << "[REQ][WaitRep=" << pending_orders_.size() << "] send order: req_delay = " << ms << "ms, req = " << ToString(req) << " ...";
         broker_->SendTradeOrder(req);
     }
 
     void MemBrokerServer::SendTradeWithdraw(MemTradeWithdrawMessage* req) {
+        int64_t now = x::RawDateTime();
+        int64_t ms = x::SubRawDateTime(now, req->timestamp);
+        pending_withdraws_.insert(std::make_pair(req->id, now));
+        LOG_INFO << "[REQ][WaitRep=" << pending_withdraws_.size() << "] send withdraw: req_delay = " << ms << "ms, req = " << ToString(req) << " ...";
         broker_->SendTradeWithdraw(req);
     }
 
-    void  MemBrokerServer::SendHeartBeat() {
-        broker_->SendHeartBeat();
+    void  MemBrokerServer::HandInnerCyclicSignal() {
+        int64_t now = x::RawDateTime();
+        if (now - last_heart_beat_ > 10000) {  // 10秒钟一次心跳
+            broker_->SendHeartBeat();
+        } else {
+            // 检查响应
+            HandleClearTimeoutMessages(now);
+        }
     }
+
+    void MemBrokerServer::HandleClearTimeoutMessages(int64_t& now) {
+        int64_t timeout_ms = 60000;
+        for (auto itr = pending_orders_.begin(); itr != pending_orders_.end();) {
+            auto ts = itr->second;
+            int64_t delay = now - ts;
+            if (delay >= timeout_ms) {
+                itr = pending_orders_.erase(itr);
+                ++timeout_orders_;
+//                auto req = flatbuffers::GetRoot<co::fbs::TradeOrderMessage>(raw.data());
+//                int64_t ms = x::SubRawDateTime(x::RawDateTime(), req->timestamp());
+//                auto queue_size = queue_.Size();
+//                auto wait_size = upstream_orders_.size();
+//                x::Error([=, raw=raw]() {
+//                    auto _raw = raw;
+//                    auto _req = flatbuffers::GetRoot<co::fbs::TradeOrderMessage>(_raw.data());
+//                    LOG_ERROR << "[TIMEOUT][Q=" << queue_size << "][WaitRep=" << wait_size
+//                              << "] send order timeout in " << ms << "ms: broker = "
+//                              << delay << "ms, req = " << ToString(*_req);
+//                });
+            } else {
+                ++itr;
+            }
+        }
+        for (auto itr = pending_withdraws_.begin(); itr != pending_withdraws_.end(); ) {
+            auto ts = itr->second;
+            int64_t delay = now - ts;
+            if (delay >= timeout_ms) {
+                itr = pending_withdraws_.erase(itr);
+                ++timeout_withdraws_;
+//                auto req = flatbuffers::GetRoot<co::fbs::TradeWithdrawMessage>(raw.data());
+//                int64_t ms = x::SubRawDateTime(x::RawDateTime(), req->timestamp());
+//                auto queue_size = queue_.Size();
+//                auto wait_size = upstream_withdraws_.size();
+//                x::Error([=, raw=raw]() {
+//                    auto _raw = raw;
+//                    auto _req = flatbuffers::GetRoot<co::fbs::TradeWithdrawMessage>(_raw.data());
+//                    LOG_ERROR << "[TIMEOUT][Q=" << queue_size << "][WaitRep=" << wait_size
+//                              << "] send withdraw timeout in " << ms << "ms: broker = "
+//                              << delay << "ms, req = " << ToString(*_req);
+//                });
+            } else {
+                ++itr;
+            }
+        }
+     }
 
     bool MemBrokerServer::IsNewMemTradeAsset(MemTradeAsset* asset) {
         bool flag = false;
@@ -481,33 +538,61 @@ namespace co {
      }
 
     void  MemBrokerServer::SendTradeOrderRep(MemTradeOrderMessage* rep) {
-        auto items = (MemTradeOrder*)((char*)rep + sizeof(MemTradeOrderMessage));
-        LOG_INFO << "rep order, fund_id: " << rep->fund_id
-                 << ", timestamp: " << rep->timestamp
-                 << ", rep_time: " << rep->rep_time
-                 << ", id: " << rep->id
-                 << ", items_size: " << rep->items_size
-                 << ", error: " << rep->error;
-        for (int i = 0; i < rep->items_size; i++) {
-            MemTradeOrder* order = items + i;
-            LOG_INFO << "order, code: " << order->code
-                     << ", order_no: " << order->order_no
-                     << ", batch_no: " << rep->batch_no
-                     << ", volume: " << order->volume
-                     << ", bs_flag: " << rep->bs_flag
-                     << ", price: " << order->price
-                     << ", error: " << order->error;
+        if (start_time_ > rep->timestamp) {
+            return;
         }
+        if (auto it = pending_orders_.find(rep->id); it != pending_orders_.end()) {
+            pending_orders_.erase(it);
+        }
+        int64_t ms = x::SubRawDateTime(x::RawDateTime(), rep->timestamp);
+        if (strlen(rep->error) > 0) {
+            LOG_ERROR << "[REP][WaitRep=" << pending_orders_.size()
+                      << "] send order failed in " << ms << "ms, rep = " << ToString(rep);
+        } else {
+            LOG_ERROR << "[REP][WaitRep=" << pending_orders_.size()
+                      << "] send order ok in " << ms << "ms, rep = " << ToString(rep);
+        }
+//        auto items = (MemTradeOrder*)((char*)rep + sizeof(MemTradeOrderMessage));
+//        LOG_INFO << "rep order, fund_id: " << rep->fund_id
+//                 << ", timestamp: " << rep->timestamp
+//                 << ", rep_time: " << rep->rep_time
+//                 << ", id: " << rep->id
+//                 << ", items_size: " << rep->items_size
+//                 << ", error: " << rep->error;
+//        for (int i = 0; i < rep->items_size; i++) {
+//            MemTradeOrder* order = items + i;
+//            LOG_INFO << "order, code: " << order->code
+//                     << ", order_no: " << order->order_no
+//                     << ", batch_no: " << rep->batch_no
+//                     << ", volume: " << order->volume
+//                     << ", bs_flag: " << rep->bs_flag
+//                     << ", price: " << order->price
+//                     << ", error: " << order->error;
+//        }
     }
 
     void  MemBrokerServer::SendTradeWithdrawRep(MemTradeWithdrawMessage* rep) {
-        LOG_INFO << "rep withdraw, fund_id: " << rep->fund_id
-                 << ", id: " << rep->id
-                 << ", timestamp: " << rep->timestamp
-                 << ", rep_time: " << rep->rep_time
-                 << ", order_no: " << rep->order_no
-                 << ", batch_no: " << rep->batch_no
-                 << ", error: " << rep->error;
+        if (start_time_ > rep->timestamp) {
+            return;
+        }
+        if (auto it = pending_withdraws_.find(rep->id); it != pending_withdraws_.end()) {
+            pending_withdraws_.erase(it);
+        }
+        int64_t ms = x::SubRawDateTime(x::RawDateTime(), rep->timestamp);
+        if (strlen(rep->error) > 0) {
+            LOG_ERROR << "[REP][WaitRep=" << pending_withdraws_.size()
+                      << "] send withdraw failed in " << ms << "ms, rep = " << ToString(rep);
+        } else {
+            LOG_ERROR << "[REP][WaitRep=" << pending_withdraws_.size()
+                      << "] send withdraw ok in " << ms << "ms, rep = " << ToString(rep);
+        }
+//        LOG_INFO << "rep withdraw, fund_id: " << rep->fund_id
+//                 << ", id: " << rep->id
+//                 << ", timestamp: " << rep->timestamp
+//                 << ", rep_time: " << rep->rep_time
+//                 << ", order_no: " << rep->order_no
+//                 << ", batch_no: " << rep->batch_no
+//                 << ", error: " << rep->error;
     }
 
     void  MemBrokerServer::SendTradeKnock(MemTradeKnock* knock) {
@@ -524,32 +609,17 @@ namespace co {
                      << ", match_amount: " << knock->match_amount
                      ;
         }
-
-//        string fund_id = knock->fund_id;
-//        string key = fund_id + "_" + string(knock->match_no);
-//        auto it = knocks_.find(fund_id);
-//        if (it == knocks_.end()) {
-//            std::shared_ptr<std::set<std::string>> all_knock = std::make_shared<std::set<std::string>>();
-//            all_knock->insert(key);
-//            knocks_.insert(std::make_pair(fund_id, all_knock));
-//        } else {
-//            std::shared_ptr<std::set<std::string>> all_knock = it->second;
-//            auto item = all_knock->find(key);
-//            if (item == all_knock->end()) {
-//                all_knock->insert(key);
-//            }
-//        }
     }
 
     void  MemBrokerServer::RunWatch() {
-        int64_t watch_interval_ms = 10000;
+        int64_t watch_interval_ms = 5000;
         while (true) {
             x::Sleep(watch_interval_ms);
             int length = sizeof(HeartBeatMessage);
             void* buffer = inner_writer_.OpenFrame(length);
             HeartBeatMessage* msg = (HeartBeatMessage*)buffer;
             msg->timestamp = x::RawDateTime();
-            inner_writer_.CloseFrame(kMemTypeInnerHeartBeat);
+            inner_writer_.CloseFrame(kMemTypeInnerCyclicSignal);
         }
     }
 
@@ -643,6 +713,7 @@ namespace co {
         }
 
         if (!text.empty()) {
+            LOG_ERROR << text;
 //            flatbuffers::FlatBufferBuilder fbb;
 //            co::fbs::RiskMessageT msg;
 //            msg.sender = node_id_;
