@@ -264,15 +264,15 @@ namespace co {
     }
 
     void MemBroker::SendHeartBeat() {
-        LOG_INFO << "SendHeartBeat, " << x::RawDateTime();
-        for (auto it = accounts_.begin(); it != accounts_.end(); ++it) {
-            int length = sizeof(HeartBeatMessage);
-            void* buffer = rep_writer_.OpenFrame(length);
-            HeartBeatMessage* msg = (HeartBeatMessage*) buffer;
-            strcpy(msg->fund_id, it->second.fund_id);
-            msg->timestamp = x::RawDateTime();
-            rep_writer_.CloseFrame(kMemTypeHeartBeat);
-        }
+//        LOG_INFO << "SendHeartBeat, " << x::RawDateTime();
+//        for (auto it = accounts_.begin(); it != accounts_.end(); ++it) {
+//            int length = sizeof(HeartBeatMessage);
+//            void* buffer = rep_writer_.OpenFrame(length);
+//            HeartBeatMessage* msg = (HeartBeatMessage*) buffer;
+//            strcpy(msg->fund_id, it->second.fund_id);
+//            msg->timestamp = x::RawDateTime();
+//            rep_writer_.CloseFrame(kMemTypeHeartBeat);
+//        }
     }
 
     void MemBroker::SendTradeKnock(MemTradeKnock* knock) {

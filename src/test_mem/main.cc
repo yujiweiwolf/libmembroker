@@ -68,6 +68,9 @@ int main(int argc, char* argv[]) {
 //            server.Run();
 //        }
 //        return 0;
+        int64_t now = 20240322023000000;
+        int64_t after = 20240322023100000;
+        int64_t ms = x::SubRawDateTime(after, now);
         MemBrokerOptionsPtr options = Config::Instance()->options();
         x::MMapWriter req_writer;
         req_writer.Open(options->mem_dir(), options->mem_req_file(), kReqMemSize << 20, true);

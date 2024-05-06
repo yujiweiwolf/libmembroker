@@ -32,17 +32,17 @@ namespace co {
         if (cpu_affinity_ > 0) {
             x::SetCPUAffinity(cpu_affinity_);
         }
-        void* data = nullptr;
-        auto get_req = [&](int32_t type, void* data)-> bool {
+        const void* data = nullptr;
+        auto get_req = [&](int32_t type, const void* data)-> bool {
             if (type == kMemTypeTradeOrderReq) {
-                MemTradeOrderMessage *msg = (MemTradeOrderMessage *) data;
+                MemTradeOrderMessage *msg = (MemTradeOrderMessage *)data;
                 if (server_->ExitAccout(msg->fund_id)) {
                     return true;
                 } else {
                     return false;
                 }
             } else if (type == kMemTypeTradeWithdrawReq) {
-                MemTradeWithdrawMessage *msg = (MemTradeWithdrawMessage *) data;
+                MemTradeWithdrawMessage *msg = (MemTradeWithdrawMessage *)data;
                 if (server_->ExitAccout(msg->fund_id)) {
                     return true;
                 } else {
@@ -69,7 +69,7 @@ namespace co {
             }
             //////
             while (true) {
-                int32_t type = common_reader_.Read(&data);
+                int32_t type = common_reader_.Next(&data);
 
                 if (type == kMemTypeTradeOrderRep) {
                     MemTradeOrderMessage* msg = (MemTradeOrderMessage*) data;

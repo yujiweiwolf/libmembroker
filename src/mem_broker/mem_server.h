@@ -115,7 +115,7 @@ namespace co {
         void SendTradeOrder(MemTradeOrderMessage* req);
         void SendTradeWithdraw(MemTradeWithdrawMessage* req);
         void HandInnerCyclicSignal();
-        void HandleClearTimeoutMessages(int64_t& now);
+        void HandleClearTimeoutMessages();
 
         // broker中的查询，回写共享内存前，先判断
         bool IsNewMemTradeAsset(MemTradeAsset* asset);
