@@ -13,7 +13,6 @@ namespace co {
 
     void MemBrokerServer::Init(MemBrokerOptionsPtr option, MemBrokerPtr broker) {
         opt_ = option;
-//         broker->Init(*option, this);
         x::Sleep(1000);
         broker_ = broker;
         processor_ = std::make_shared<MemProcessor>(this);
@@ -40,7 +39,7 @@ namespace co {
         }
 
         string inner_broker_file = kInnerBrokerFile;
-        inner_writer_.Open("../data", inner_broker_file.c_str(), kInnerBrokerMemSize << 20, true);
+        inner_writer_.Open("../data", inner_broker_file.c_str(), kInnerBrokerMemSize << 20, false);
 
         broker_->Init(*opt_, this);
 
@@ -569,6 +568,7 @@ namespace co {
                      << ", code: " << knock->code
                      << ", timestamp: " << knock->timestamp
                      << ", order_no: " << knock->order_no
+                     << ", match_no: " << knock->match_no
                      << ", batch_no: " << knock->batch_no
                      << ", bs_flag: " << knock->bs_flag
                      << ", match_type: " << knock->match_type

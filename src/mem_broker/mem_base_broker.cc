@@ -22,7 +22,7 @@ namespace co {
             server_ = server;
             enable_stock_short_selling_ = opt.enable_stock_short_selling();
             request_timeout_ms_ = opt.request_timeout_ms();
-            rep_writer_.Open(opt.mem_dir(), opt.mem_rep_file(), kRepMemSize << 20, true);
+            rep_writer_.Open(opt.mem_dir(), opt.mem_rep_file(), kRepMemSize << 20, false);
             OnInit();
             LOG_INFO << "initialize broker ok";
         } catch (std::exception& e) {

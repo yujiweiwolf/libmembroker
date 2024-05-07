@@ -57,6 +57,7 @@ namespace co {
     }
 
     void TestBroker::OnTradeOrder(MemTradeOrderMessage* req) {
+#if 0
         auto items = (MemTradeOrder*)((char*)req + sizeof(MemTradeOrderMessage));
         for (int i = 0; i < req->items_size; i++) {
             MemTradeOrder* order = items + i;
@@ -73,6 +74,61 @@ namespace co {
         memcpy(buffer, req, length);
         std::unique_lock<std::mutex> lock(mutex_);
         all_req_.emplace(std::pair(req->id, std::pair(kMemTypeTradeOrderReq ,buffer)));
+#endif
+        LOG_INFO << "回写报单回报";
+        int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * req->items_size;
+        void* buffer = rep_writer_.OpenFrame(length);
+        memcpy(buffer, req, length);
+        MemTradeOrderMessage* rep = (MemTradeOrderMessage*)buffer;
+        if (rep->items_size > 1) {
+            string batch_no = "batch_no_" + std::to_string(batch_no_index_++);
+            strncpy(rep->batch_no, batch_no.c_str(), batch_no.length());
+        }
+        auto items = (MemTradeOrder*)((char*)rep + sizeof(MemTradeOrderMessage));
+        for (int i = 0; i < rep->items_size; i++) {
+            MemTradeOrder* order = items + i;
+            string order_no = "order_no_" + std::to_string(order_no_index_++);
+            strcpy(order->order_no, order_no.c_str());
+        }
+        rep->rep_time = x::RawDateTime();
+        rep_writer_.CloseFrame(kMemTypeTradeOrderRep);
+//        {
+//            for (int i = 0; i < rep->items_size; i++) {
+//                MemTradeOrder* order = items + i;
+//                int length = sizeof(MemTradeKnock);
+//                void* buffer = rep_writer_.OpenFrame(length);
+//                MemTradeKnock* knock = (MemTradeKnock*) buffer;
+//                knock->timestamp = x::RawDateTime();
+//                strcpy(knock->fund_id, rep->fund_id);
+//                strcpy(knock->batch_no, rep->batch_no);
+//                strcpy(knock->code, order->code);
+//                strcpy(knock->order_no, order->order_no);
+//                knock->bs_flag = rep->bs_flag;
+//                knock->match_volume = order->volume;
+//                int index = (order->volume / 100) % 3;
+//                if (index == 0) {
+//                    knock->match_type = 1;
+//                    knock->match_price = order->price;
+//                    knock->match_amount = order->price * order->volume * 100;
+//                    string match_no = "match_no" + std::to_string(order_no_index_++);
+//                    strcpy(knock->match_no, match_no.c_str());
+//                } else if (index == 1) {
+//                    knock->match_type = 2;
+//                    knock->match_price = 0;
+//                    knock->match_amount = 0;
+//                    string match_no = "_" + string(knock->order_no);
+//                    strcpy(knock->match_no, match_no.c_str());
+//                } else {
+//                    knock->match_type = 3;
+//                    knock->match_price = 0;
+//                    knock->match_amount = 0;
+//                    string match_no = "_" + string(knock->order_no);
+//                    strcpy(knock->match_no, match_no.c_str());
+//                    strcpy(knock->error, "报单价格不正确");
+//                }
+//                rep_writer_.CloseFrame(kMemTypeTradeKnock);
+//            }
+//        }
     }
 
     void TestBroker::OnTradeWithdraw(MemTradeWithdrawMessage* req) {
@@ -81,11 +137,39 @@ namespace co {
                         << ", timestamp: " << req->timestamp
                         << ", order_no: " << req->order_no
                         << ", batch_no: " << req->batch_no;
+#if 0
         int length = sizeof(MemTradeWithdrawMessage);
         void* buffer = new char[length];
         memcpy(buffer, req, length);
         std::unique_lock<std::mutex> lock(mutex_);
         all_req_.emplace(std::pair(req->id, std::pair(kMemTypeTradeWithdrawReq ,buffer)));
+#endif
+        LOG_INFO << "回写撤单回报";
+        int length = sizeof(MemTradeWithdrawMessage);
+        void* buffer = rep_writer_.OpenFrame(length);
+        memcpy(buffer, req, length);
+        MemTradeWithdrawMessage* rep = (MemTradeWithdrawMessage*)buffer;
+        rep->rep_time = x::RawDateTime();
+        if (rep->rep_time % 2 == 0) {
+            strcpy(rep->error, "撤单错误，报单已成交");
+        }
+        rep_writer_.CloseFrame(kMemTypeTradeWithdrawRep);
+        if (rep->rep_time % 2 != 0) {
+            int length = sizeof(MemTradeKnock);
+            void* buffer = rep_writer_.OpenFrame(length);
+            MemTradeKnock* knock = (MemTradeKnock*) buffer;
+            knock->timestamp = x::RawDateTime();
+            strcpy(knock->fund_id, rep->fund_id);
+            strcpy(knock->code, "600000.SH");
+            strcpy(knock->order_no, rep->order_no);
+            knock->match_volume = 100;
+            knock->match_type = co::kMatchTypeWithdrawOK;
+            knock->match_price = 0;
+            knock->match_amount = 0;
+            string match_no = "_" + string(knock->order_no);
+            strcpy(knock->match_no, match_no.c_str());
+            rep_writer_.CloseFrame(kMemTypeTradeKnock);
+        }
     }
 
     void TestBroker::HandReqData() {
@@ -149,15 +233,15 @@ namespace co {
                     }
                     case kMemTypeTradeWithdrawReq: {
                         LOG_INFO << "回写撤单回报";
-//                        int length = sizeof(MemTradeWithdrawMessage);
-//                        void* buffer = rep_writer_.OpenFrame(length);
-//                        memcpy(buffer, item.second, length);
-//                        MemTradeWithdrawMessage* rep = (MemTradeWithdrawMessage*)buffer;
-//                        rep->rep_time = x::RawDateTime();
-//                        if (rep->rep_time % 2 == 0) {
-//                            strcpy(rep->error, "撤单错误，报单已成交");
-//                        }
-//                        rep_writer_.CloseFrame(kMemTypeTradeWithdrawRep);
+                        int length = sizeof(MemTradeWithdrawMessage);
+                        void* buffer = rep_writer_.OpenFrame(length);
+                        memcpy(buffer, item.second, length);
+                        MemTradeWithdrawMessage* rep = (MemTradeWithdrawMessage*)buffer;
+                        rep->rep_time = x::RawDateTime();
+                        if (rep->rep_time % 2 == 0) {
+                            strcpy(rep->error, "撤单错误，报单已成交");
+                        }
+                        rep_writer_.CloseFrame(kMemTypeTradeWithdrawRep);
                         break;
                     }
                     case kMemTypeQueryTradeAssetReq: {
@@ -169,7 +253,7 @@ namespace co {
                         memset(&asset, 0, sizeof(asset));
                         asset.timestamp = x::RawDateTime();
                         strcpy(asset.fund_id, req->fund_id);
-                        asset.balance = 100.0 + req->timestamp % 2;
+                        asset.balance = 100.0 + req->timestamp % 17;
                         asset.usable = 23.0;
                         if (IsNewMemTradeAsset(&asset)) {
                             total_num++;

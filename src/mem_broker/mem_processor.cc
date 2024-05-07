@@ -54,7 +54,8 @@ namespace co {
         while (true) {
             // 抢占式读网关的报撤单数据
             while (true) {
-                int32_t type = consume_reader_.ConsumeWhere(&data, get_req, true);
+                // int32_t type = consume_reader_.ConsumeWhere(&data, get_req, true);
+                int32_t type = consume_reader_.Next(&data);
                 if (type == kMemTypeTradeOrderReq) {
                     LOG_INFO << "type: " << type;
                     MemTradeOrderMessage* msg = (MemTradeOrderMessage*) data;
@@ -70,7 +71,6 @@ namespace co {
             //////
             while (true) {
                 int32_t type = common_reader_.Next(&data);
-
                 if (type == kMemTypeTradeOrderRep) {
                     MemTradeOrderMessage* msg = (MemTradeOrderMessage*) data;
                     server_->SendTradeOrderRep(msg);
