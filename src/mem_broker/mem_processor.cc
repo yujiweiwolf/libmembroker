@@ -1,6 +1,7 @@
 
 #include <regex>
 #include <iomanip>
+#include <boost/filesystem.hpp>
 #include "x/x.h"
 #include "coral/coral.h"
 #include "mem_processor.h"
@@ -18,13 +19,30 @@ namespace co {
 
     void MemProcessor::Init(const MemBrokerOptions& opt) {
         string mem_dir = opt.mem_dir();
-        string req_mem_file = opt.mem_req_file();
-        string rep_mem_file = opt.mem_rep_file();
+        string mem_req_file = opt.mem_req_file();
+        string mem_rep_file = opt.mem_rep_file();
         string inner_broker_file = kInnerBrokerFile;
         cpu_affinity_ = opt.cpu_affinity();
 
-        consume_reader_.Open(mem_dir, req_mem_file, true);
-        common_reader_.Open(mem_dir, rep_mem_file, false);  // 响应结果从头开始读取
+        bool exit_flag = false;
+        if (boost::filesystem::exists(mem_dir)) {
+            boost::filesystem::path p(mem_dir);
+            for (auto &file : boost::filesystem::directory_iterator(p)) {
+                const string filename = file.path().filename().string();
+                if (filename.find(mem_req_file) != filename.npos) {
+                    exit_flag = true;
+                    break;
+                }
+            }
+        }
+        if (!exit_flag) {
+            x::MMapWriter req_writer;
+            req_writer.Open(mem_dir, mem_req_file, kReqMemSize << 20, true);
+        }
+        consume_reader_.SetEnableConsume(true);
+        consume_reader_.Open(mem_dir, mem_req_file, true);
+
+        common_reader_.Open(mem_dir, mem_rep_file, false);  // 响应结果从头开始读取
         common_reader_.Open("../data", inner_broker_file, true);
     }
 
@@ -54,8 +72,8 @@ namespace co {
         while (true) {
             // 抢占式读网关的报撤单数据
             while (true) {
-                // int32_t type = consume_reader_.ConsumeWhere(&data, get_req, true);
-                int32_t type = consume_reader_.Next(&data);
+                int32_t type = consume_reader_.ConsumeWhere(&data, get_req, true);
+                // int32_t type = consume_reader_.Next(&data);
                 if (type == kMemTypeTradeOrderReq) {
                     LOG_INFO << "type: " << type;
                     MemTradeOrderMessage* msg = (MemTradeOrderMessage*) data;

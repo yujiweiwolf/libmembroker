@@ -30,13 +30,14 @@ void write_order(x::MMapWriter* writer) {
         MemTradeOrder* item = (MemTradeOrder*)((char*)buffer + sizeof(MemTradeOrderMessage));
         for (int i = 0; i < total_order_num; i++) {
             MemTradeOrder* order = item + i;
-            order->volume = 100 * ( i + 1);
+            order->volume = 100 * ( index + 1);
             order->price = 10.01 + 0.01 * i;
             order->price_type = kQOrderTypeLimit;
-            sprintf(order->code, "00000%d.SZ", i + 1);
+            sprintf(order->code, "00000%d.SZ", index + 1);
             LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
         }
         msg->timestamp = x::RawDateTime();
+        msg->basket_volume = x::NSTimestamp();
         writer->CloseFrame(kMemTypeTradeOrderReq);
     }
 }
@@ -94,10 +95,10 @@ void Run() {
         if (type == kMemTypeTradeOrderRep) {
             MemTradeOrderMessage* rep = (MemTradeOrderMessage*)data;
             {
-                int64_t now_time = x::RawDateTime();
-                int64_t rep_diff = rep->rep_time - rep->timestamp;
-                int64_t read_rep = now_time - rep->rep_time;
-                int64_t cross_diff = now_time - rep->timestamp;
+                int64_t now_time = x::NSTimestamp();
+                int64_t rep_diff = (rep->basket_size - rep->basket_volume) / 1000;
+                int64_t read_rep = (now_time - rep->basket_size) / 1000;
+                int64_t cross_diff = (now_time - rep->basket_volume) / 1000;
                 LOG_INFO << "rep_diff: " << rep_diff << ", read_rep: " << read_rep << ", cross_diff: " << cross_diff;
                 auto items = (MemTradeOrder*)((char*)rep + sizeof(MemTradeOrderMessage));
                 for (int i = 0; i < rep->items_size; i++) {
@@ -140,7 +141,7 @@ int main(int argc, char* argv[]) {
     try {
         std::thread t1(Run);
         x::MMapWriter req_writer;
-        req_writer.Open(mem_dir, mem_req_file, kReqMemSize << 20, false);
+        req_writer.Open(mem_dir, mem_req_file, kReqMemSize << 20, true);
         string usage("\nTYPE  'q' to quit program\n");
         usage += "      '1' to order_sh\n";
         usage += "      '2' to order_sz\n";

@@ -17,6 +17,9 @@ int main(int argc, char* argv[]) {
         shared_ptr<TestBroker> broker = make_shared<TestBroker>();
         server.Init(options, broker);
         server.Run();
+        while (true) {
+            x::Sleep(1000);
+        }
     } catch (std::exception& e) {
         LOG_FATAL << "server is crashed, " << e.what();
         throw e;

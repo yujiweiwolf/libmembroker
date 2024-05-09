@@ -39,7 +39,7 @@ namespace co {
         }
 
         string inner_broker_file = kInnerBrokerFile;
-        inner_writer_.Open("../data", inner_broker_file.c_str(), kInnerBrokerMemSize << 20, false);
+        inner_writer_.Open("../data", inner_broker_file.c_str(), kInnerBrokerMemSize << 20, true);
 
         broker_->Init(*opt_, this);
 
