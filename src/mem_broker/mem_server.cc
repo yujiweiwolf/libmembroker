@@ -38,8 +38,7 @@ namespace co {
             throw std::runtime_error("broker is required, please initialize broker server before starting");
         }
 
-        string inner_broker_file = kInnerBrokerFile;
-        inner_writer_.Open("../data", inner_broker_file.c_str(), kInnerBrokerMemSize << 20, true);
+        inner_writer_.Open("../data", kInnerBrokerFile, kInnerBrokerMemSize << 20, true);
 
         broker_->Init(*opt_, this);
 
@@ -456,9 +455,9 @@ namespace co {
             });
             return;
         }
-        auto positions = (MemTradePosition*)((char*)rep + sizeof(MemGetTradePositionMessage));
+        auto item = (MemTradePosition*)((char*)rep + sizeof(MemGetTradePositionMessage));
         for (int i = 0; i < rep->items_size; i++) {
-            MemTradePosition *position = positions + i;
+            MemTradePosition *position = item + i;
             LOG_INFO << "[DATA][POSITION] update position: fund_id: " << fund_id
                  << ", timestamp: " << rep->timestamp
                  << ", code: " << position->code

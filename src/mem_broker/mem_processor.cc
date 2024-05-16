@@ -75,11 +75,9 @@ namespace co {
                 int32_t type = consume_reader_.ConsumeWhere(&data, get_req, true);
                 // int32_t type = consume_reader_.Next(&data);
                 if (type == kMemTypeTradeOrderReq) {
-                    LOG_INFO << "type: " << type;
                     MemTradeOrderMessage* msg = (MemTradeOrderMessage*) data;
                     server_->SendTradeOrder(msg);
                 } else if (type == kMemTypeTradeWithdrawReq) {
-                    LOG_INFO << "type: " << type;
                     MemTradeWithdrawMessage* msg = (MemTradeWithdrawMessage*) data;
                     server_->SendTradeWithdraw(msg);
                 } else if (type == 0) {
