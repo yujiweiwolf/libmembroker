@@ -111,6 +111,10 @@ namespace co {
         return server_->IsNewMemTradePosition(pos);
     }
 
+    void MemBroker::UpdataZeroPosition(const string& fund_id) {
+        return server_->UpdataZeroPosition(fund_id);
+    }
+
     bool MemBroker::IsNewMemTradeKnock(MemTradeKnock* knock) {
         return server_->IsNewMemTradeKnock(knock);
     }

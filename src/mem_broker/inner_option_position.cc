@@ -1,12 +1,7 @@
 #include "inner_option_position.h"
 
 namespace co {
-
-    InnerOptionPosition::InnerOptionPosition(std::string fund_id, std::string code, int64_t bs_flag):
-        fund_id_(fund_id),
-        code_(code),
-        bs_flag_(bs_flag) {
-
+    InnerOptionPosition::InnerOptionPosition(std::string fund_id, std::string code, int64_t bs_flag): fund_id_(fund_id), code_(code), bs_flag_(bs_flag) {
     }
 
     std::string InnerOptionPosition::ToString() {

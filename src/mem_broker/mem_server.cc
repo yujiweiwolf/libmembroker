@@ -362,7 +362,24 @@ namespace co {
                 }
             }
         }
+        pos_code_.insert(code);
         return flag;
+     }
+
+    void MemBrokerServer::UpdataZeroPosition(const string& fund_id) {
+        auto it = positions_.find(fund_id);
+        if (it != positions_.end()) {
+            std::shared_ptr<std::map<std::string, MemTradePosition>> pos = it->second;
+            for (auto itor = pos->begin(); itor != pos->end();) {
+                if (auto item = pos_code_.find(itor->first); item == pos_code_.end()) {
+                    LOG_INFO << "fund_id: " << fund_id << ", code: " << itor->second.code << " pos is zero";
+                    itor = pos->erase(itor);
+                } else {
+                    ++itor;
+                }
+            }
+        }
+        pos_code_.clear();
      }
 
     bool MemBrokerServer::MemBrokerServer::IsNewMemTradeKnock(MemTradeKnock* knock) {

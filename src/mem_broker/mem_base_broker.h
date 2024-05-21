@@ -64,6 +64,7 @@ class MemBroker {
     // broker中的查询，回写共享内存前，先判断
     bool IsNewMemTradeAsset(MemTradeAsset* asset);
     bool IsNewMemTradePosition(MemTradePosition* pos);
+    void UpdataZeroPosition(const string& fund_id);
     bool IsNewMemTradeKnock(MemTradeKnock* knock);
 
  protected:

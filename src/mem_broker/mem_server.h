@@ -120,6 +120,7 @@ namespace co {
         // broker中的查询，回写共享内存前，先判断
         bool IsNewMemTradeAsset(MemTradeAsset* asset);
         bool IsNewMemTradePosition(MemTradePosition* pos);
+        void UpdataZeroPosition(const string& fund_id);  // 如果仓位变为0，api不返回这条持仓，需要调用此函数
         bool IsNewMemTradeKnock(MemTradeKnock* knock);
 
         void SendQueryTradeAssetRep(MemGetTradeAssetMessage* rep);
@@ -175,6 +176,7 @@ namespace co {
         std::map<std::string, MemTradeAsset> assets_;
         std::map<std::string, std::shared_ptr<std::map<std::string, MemTradePosition>>> positions_; // fund_id -> {code -> obj}
         std::set<std::string> knocks_;
+        std::set<std::string> pos_code_;
 
         int64_t active_task_timestamp_ = 0; // 正在执行任务的开始时间
         x::MMapWriter inner_writer_;  // 内部使用，1秒钟写一次，供server检查查询与报撤单是否有响应使用

@@ -277,16 +277,16 @@ namespace co {
                         MemGetTradePositionMessage* req = (MemGetTradePositionMessage*)item.second;
                         // 生成item，再判断每一个是否有效
                         std::vector<MemTradePosition> tmp_pos;
-                        for (int i = 0; i < 5; i++) {
+                        int tmp_rand =  rand();
+                        for (int i = 0; i < tmp_rand % 5; i++) {
                             MemTradePosition pos;
                             memset(&pos, 0, sizeof(MemTradePosition));
                             pos.timestamp = x::RawDateTime();
                             strcpy(pos.fund_id, req->fund_id);
                             sprintf(pos.code, "00000%d.SZ", i + 1);
                             pos.market = co::kMarketSZ;
-                            pos.long_volume = i * 100 + rand() % 37 + 100;
+                            pos.long_volume = i * 100 + tmp_rand % 37 + 100;
                             pos.long_can_close = pos.long_volume - 100;
-                            // pos.short_can_open = rand() % 37;
                             tmp_pos.push_back(pos);
                         }
                         for (auto it = tmp_pos.begin(); it != tmp_pos.end();) {
@@ -310,6 +310,7 @@ namespace co {
                             }
                         }
                         PushMemBuffer(kMemTypeQueryTradePositionRep);
+                        UpdataZeroPosition(req->fund_id);
                         break;
                     }
                     case kMemTypeQueryTradeKnockReq: {

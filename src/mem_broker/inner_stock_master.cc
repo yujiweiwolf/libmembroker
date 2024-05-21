@@ -218,4 +218,3 @@ namespace co {
         return pos;
     }
 }  // namespace co
-
