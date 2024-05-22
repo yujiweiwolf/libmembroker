@@ -12,7 +12,6 @@ using namespace std;
 using namespace co;
 namespace po = boost::program_options;
 #define NUM_ORDER 1
-#define NUM_THREAD 1
 
 const char fund_id[] = "S1";
 const char mem_dir[] = "../data";

@@ -152,6 +152,7 @@ namespace co {
         if (rep->rep_time % 2 == 0) {
             strcpy(rep->error, "撤单错误，报单已成交");
         }
+        rep->rep_time = x::RawDateTime();
         rep_writer_.CloseFrame(kMemTypeTradeWithdrawRep);
         if (rep->rep_time % 2 != 0) {
             int length = sizeof(MemTradeKnock);

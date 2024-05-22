@@ -29,23 +29,19 @@ class MemBroker {
     bool ExitAccout(const string& fund_id);
     void AddAccount(const co::MemTradeAccount& account);
 
-
-    inline InnerStockMaster* inner_stock_master() {
-        return &inner_stock_master_;
-    }
-
-    inline InnerOptionMaster* inner_option_master() {
-        return &inner_option_master_;
-    }
-
     void SendQueryTradeAsset(MemGetTradeAssetMessage* req);
     void SendQueryTradePosition(MemGetTradePositionMessage* req);
     void SendQueryTradeKnock(MemGetTradeKnockMessage* req);
     void SendTradeOrder(MemTradeOrderMessage* req);
     void SendTradeWithdraw(MemTradeWithdrawMessage* req);
 
-    // 回写心跳
+    void SetInitPositions(MemGetTradePositionMessage* rep, int8_t dtype);
+
+    // 响应内存写入心跳
     void SendHeartBeat();
+
+    // 响应内存写入警告信息
+    void SendRiskMessage(const string& msg);
 
     // 自动开平，计算持仓
     void SendTradeKnock(MemTradeKnock* knock);
@@ -56,10 +52,6 @@ class MemBroker {
     void* CreateMemBuffer(int64_t length);
 
     void PushMemBuffer(int64_t function);
-
-//        void SendQueryTradeAssetRep(MemTradeAsset* data);
-//        void SendQueryTradePositionRep(MemTradePosition* data);
-//        void SendQueryTradeKnockRep(MemTradeKnock* data);
 
     // broker中的查询，回写共享内存前，先判断
     bool IsNewMemTradeAsset(MemTradeAsset* asset);

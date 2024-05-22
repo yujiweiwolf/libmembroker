@@ -63,6 +63,11 @@ namespace co {
         int64_t timestamp = 0;
     };
 
+    struct MemMonitorRiskMessage {
+        int64_t timestamp = 0;
+        char error[1024];
+    };
+
     constexpr int kMemTypeQueryTradeAssetReq = 6400001;
     constexpr int kMemTypeQueryTradeAssetRep = 6400002;
     constexpr int kMemTypeQueryTradePositionReq = 6400003;
@@ -71,4 +76,5 @@ namespace co {
     constexpr int kMemTypeQueryTradeKnockRep = 6400006;
     constexpr int kMemTypeInnerCyclicSignal = 6400007;
     constexpr int kMemTypeHeartBeat = 6400008;
+    constexpr int kMemTypeMonitorRisk = 6400009;
 }    // namespace co

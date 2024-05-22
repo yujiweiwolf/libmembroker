@@ -104,8 +104,6 @@ namespace co {
         void Run();
 
         bool ExitAccout(const string& fund_id);
-//        void* CreateMemBuffer(int length);
-//        void PushMemBuffer(int function);
         void BeginTask();
         void EndTask();
 
@@ -160,8 +158,6 @@ namespace co {
         std::vector<std::shared_ptr<Upstream>> upstreams_;
 
         std::vector<std::shared_ptr<std::thread>> threads_;
-        std::atomic_int64_t timeout_orders_ = 0;  // 等待响应超时的委托个数
-        std::atomic_int64_t timeout_withdraws_ = 0;  // 等待响应超时的撤单个数
 
         bool enable_upload_asset_ = false;
         bool enable_upload_position_ = false;
@@ -183,11 +179,9 @@ namespace co {
         int64_t start_time_ = 0;
         int64_t wait_size_ = 0;  // 查询待处理的消息队列
         int64_t last_heart_beat_ = 0;
-//        int64_t withdraw_wait_size_ = 0;
 
         std::unordered_map<std::string, int64_t> pending_orders_;
         std::unordered_map<std::string, int64_t> pending_withdraws_;
-
     };
 }  // namespace co
 
