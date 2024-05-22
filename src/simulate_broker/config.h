@@ -25,10 +25,6 @@ namespace co {
             return accounts_;
         }
 
-//        inline const std::map<std::string, std::unique_ptr<co::fbs::TradeRouteT>>& routes() const {
-//            return routes_;
-//        }
-
     protected:
         Config() = default;
         ~Config() = default;
@@ -41,6 +37,5 @@ namespace co {
         static Config* instance_;
         MemBrokerOptionsPtr options_;
         std::map<std::string, std::shared_ptr<MemTradeAccount>> accounts_;
-        // std::map<std::string, std::unique_ptr<co::fbs::TradeRouteT>> routes_;
     };
 }

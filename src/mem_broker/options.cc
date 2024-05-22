@@ -74,6 +74,7 @@ namespace co {
         opt->query_knock_interval_ms_ = getInt(broker, "query_knock_interval_ms");
         opt->idle_sleep_ns_ = getInt(broker, "idle_sleep_ns");
         opt->cpu_affinity_ = getInt(broker, "cpu_affinity", -1);
+        opt->node_name_ = getStr(broker, "node_name");
         opt->mem_dir_ = getStr(broker, "mem_dir");
         opt->mem_req_file_ = getStr(broker, "mem_req_file");
         opt->mem_rep_file_ = getStr(broker, "mem_rep_file");
@@ -97,6 +98,7 @@ namespace co {
             << "  enable_stock_short_selling: " << (enable_stock_short_selling_ ? "true" : "false") << std::endl
             << "  idle_sleep_ns: " << idle_sleep_ns_ << "ns" << std::endl
             << "  cpu_affinity: " << cpu_affinity_ << std::endl
+            << "  node_name: " << node_name_ << std::endl
             << "  mem_dir: " << mem_dir_ << std::endl
             << "  mem_req_file: " << mem_req_file_ << std::endl
             << "  mem_rep_file: " << mem_rep_file_ << std::endl

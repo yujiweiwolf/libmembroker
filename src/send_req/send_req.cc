@@ -97,22 +97,6 @@ void ReadRep() {
         if (type == kMemTypeTradeOrderRep) {
             MemTradeOrderMessage* rep = (MemTradeOrderMessage*)data;
             LOG_INFO << "收到报单响应, " << ToString(rep);
-//            {
-//                auto items = (MemTradeOrder*)((char*)rep + sizeof(MemTradeOrderMessage));
-//                for (int i = 0; i < rep->items_size; i++) {
-//                    MemTradeOrder* order = items + i;
-//                    LOG_INFO << "收到报单成交回报, code: " << order->code
-//                             << ", fund_id: " << rep->fund_id
-//                             << ", timestamp: " << rep->timestamp
-//                             << ", rep_time: " << rep->rep_time
-//                             << ", id: " << rep->id
-//                             << ", volume: " << order->volume
-//                             << ", bs_flag: " << rep->bs_flag
-//                             << ", price: " << order->price
-//                             << ", order_no: " << order->order_no
-//                             ;
-//                }
-//            }
         } else if (type == kMemTypeTradeWithdrawRep) {
             MemTradeWithdrawMessage* rep = (MemTradeWithdrawMessage*) data;
             LOG_INFO << "收到撤单响应, " << ToString(rep);
@@ -166,6 +150,9 @@ void ReadRep() {
                          << ", match_price: " << knock->match_price
                          << ", match_amount: " << knock->match_amount;
             }
+        } else if (type == kMemTypeMonitorRisk) {
+            MemMonitorRiskMessage* msg = (MemMonitorRiskMessage*) data;
+            LOG_ERROR << "Risk, " << msg->error << ", timestamp: " << msg->timestamp;
         }
     }
 }

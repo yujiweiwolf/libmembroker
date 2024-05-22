@@ -13,6 +13,7 @@ namespace co {
 
     void MemBrokerServer::Init(MemBrokerOptionsPtr option, MemBrokerPtr broker) {
         opt_ = option;
+        node_name_ = option->node_name();
         x::Sleep(1000);
         broker_ = broker;
         processor_ = std::make_shared<MemProcessor>(this);
@@ -254,46 +255,8 @@ namespace co {
             last_heart_beat_ = now;
             broker_->SendHeartBeat();
         }
-        // HandleClearTimeoutMessages();
         DoWatch();
     }
-
-    void MemBrokerServer::HandleClearTimeoutMessages() {
-//        int64_t timeout_ms = 60000;
-//        int64_t now = x::RawDateTime();
-//        for (auto itr = pending_orders_.begin(); itr != pending_orders_.end();) {
-//            auto ts = itr->second;
-//            int64_t delay = x::SubRawDateTime(now, ts);
-//            if (delay >= timeout_ms) {
-//                itr = pending_orders_.erase(itr);
-//                ++timeout_orders_;
-//                auto wait_size = pending_orders_.size();
-//                x::Error([=]() {
-//                    LOG_ERROR << "[TIMEOUT][WaitRep=" << pending_orders_.size()
-//                              << "] send order timeout in " << delay << "ms, id: " << itr->first;
-//                });
-//            } else {
-//                ++itr;
-//            }
-//        }
-//        for (auto itr = pending_withdraws_.begin(); itr != pending_withdraws_.end(); ) {
-//            auto ts = itr->second;
-//            int64_t delay = now - ts;
-//            if (delay >= timeout_ms) {
-//                itr = pending_withdraws_.erase(itr);
-//                ++timeout_withdraws_;
-//                int64_t ms = x::SubRawDateTime(now, ts);
-//                auto wait_size = pending_withdraws_.size();
-//                x::Error([=]() {
-//                    LOG_ERROR << "[TIMEOUT][WaitRep=" << pending_withdraws_.size()
-//                              << "] send withdraw timeout in " << ms << "ms: broker = "
-//                              << delay << "ms, id = " << itr->first;
-//                });
-//            } else {
-//                ++itr;
-//            }
-//        }
-     }
 
     bool MemBrokerServer::IsNewMemTradeAsset(MemTradeAsset* asset) {
         bool flag = false;
@@ -605,12 +568,13 @@ namespace co {
             auto ts = itr->second;
             int64_t delay = x::SubRawDateTime(now, ts);
             if (delay >= timeout_ms) {
+                string id = itr->first;
                 itr = pending_orders_.erase(itr);
                 ++timeout_orders;
                 auto wait_size = pending_orders_.size();
                 x::Error([=]() {
                     LOG_ERROR << "[TIMEOUT][WaitRep=" << pending_orders_.size()
-                              << "] send order timeout in " << delay << "ms, id: " << itr->first;
+                              << "] send order timeout in " << delay << "ms, id: " << id;
                 });
             } else {
                 ++itr;
@@ -618,16 +582,16 @@ namespace co {
         }
         for (auto itr = pending_withdraws_.begin(); itr != pending_withdraws_.end(); ) {
             auto ts = itr->second;
-            int64_t delay = now - ts;
+            int64_t delay = x::SubRawDateTime(now, ts);
             if (delay >= timeout_ms) {
+                string id = itr->first;
                 itr = pending_withdraws_.erase(itr);
                 ++timeout_withdraws;
-                int64_t ms = x::SubRawDateTime(now, ts);
                 auto wait_size = pending_withdraws_.size();
                 x::Error([=]() {
                     LOG_ERROR << "[TIMEOUT][WaitRep=" << pending_withdraws_.size()
-                              << "] send withdraw timeout in " << ms << "ms: broker = "
-                              << delay << "ms, id = " << itr->first;
+                              << "] send withdraw timeout in " << delay << "ms: broker = "
+                              << delay << "ms, id = " << id;
                 });
             } else {
                 ++itr;
@@ -648,7 +612,7 @@ namespace co {
         if (text.empty() && active_task_timestamp_ > 0) { // 检查调用broker函数是否卡死
             int64_t begin_ts = active_task_timestamp_;
             if (begin_ts > 0) {
-                int64_t delay_s = (x::Timestamp() - begin_ts) / 1000;
+                int64_t delay_s = x::SubRawDateTime(x::Timestamp(), begin_ts) / 1000;
                 if (delay_s > 10) {
                     LOG_WARN << "[watchdog] broker has been blocked for " << delay_s << "s";
                     if (delay_s < 60) {
@@ -667,15 +631,10 @@ namespace co {
                     min_time = ctx->last_success_time();
                 }
             }
-            int64_t interval_ms = opt_->query_asset_interval_ms();
             int64_t delay_s = (x::Timestamp() - min_time) / 1000;
-            if (delay_s > 10 && delay_s > 10 * interval_ms * 1000) {
+            if (delay_s > 60) {
                 LOG_WARN << "[watchdog] query asset failed for " << delay_s << "s";
-                if (delay_s < 60) {
-                    text = "柜台状态异常：【" + node_name_ + "】查询资金失败超过：" + std::to_string(delay_s) + "秒";
-                } else {
-                    text = "柜台状态异常：【" + node_name_ + "】查询资金失败超过1分钟";
-                }
+                text = "柜台状态异常：【" + node_name_ + "】查询资金失败超过：" + std::to_string(delay_s) + "秒";
             }
         }
         if (text.empty() && !position_contexts_.empty()) {
@@ -686,15 +645,10 @@ namespace co {
                     min_time = ctx->last_success_time();
                 }
             }
-            int64_t interval_ms = opt_->query_position_interval_ms();
             int64_t delay_s = (x::Timestamp() - min_time) / 1000;
-            if (delay_s > 10 && delay_s > 10 * interval_ms * 1000) {
+            if (delay_s > 60) {
                 LOG_WARN << "[watchdog] query position failed for " << delay_s << "s";
-                if (delay_s < 60) {
-                    text = "柜台状态异常：【" + node_name_ + "】查询持仓失败超过：" + std::to_string(delay_s) + "秒";
-                } else {
-                    text = "柜台状态异常：【" + node_name_ + "】查询持仓失败超过1分钟";
-                }
+                text = "柜台状态异常：【" + node_name_ + "】查询持仓失败超过：" + std::to_string(delay_s) + "秒";
             }
         }
 
@@ -706,33 +660,16 @@ namespace co {
                     min_time = ctx->last_success_time();
                 }
             }
-            int64_t interval_ms = opt_->query_knock_interval_ms();
             int64_t delay_s = (x::Timestamp() - min_time) / 1000;
-            if (delay_s > 10 && delay_s > 10 * interval_ms * 1000) {
+            if (delay_s > 60) {
                 LOG_WARN << "[watchdog] query knock failed for " << delay_s << "s";
-                if (delay_s < 60) {
-                    text = "柜台状态异常：【" + node_name_ + "】查询成交失败超过：" + std::to_string(delay_s) + "秒";
-                } else {
-                    text = "柜台状态异常：【" + node_name_ + "】查询成交失败超过1分钟";
-                }
+                text = "柜台状态异常：【" + node_name_ + "】查询成交失败超过：" + std::to_string(delay_s) + "秒";
             }
         }
 
         if (!text.empty()) {
             LOG_ERROR << text;
-//            flatbuffers::FlatBufferBuilder fbb;
-//            co::fbs::RiskMessageT msg;
-//            msg.sender = node_id_;
-//            msg.id = msg.sender + "#error";
-//            msg.timestamp = x::RawDateTime();
-//            msg.level = kMonitorLevelError;
-//            msg.timeout = 60000;
-//            msg.text = text;
-//            msg.voice = text;
-//            fbb.Clear();
-//            fbb.Finish(co::fbs::RiskMessage::Pack(fbb, &msg));
-//            std::string raw((const char*)fbb.GetBufferPointer(), fbb.GetSize());
-//            SendRiskMessage(raw);
+            broker_->SendRiskMessage(text);
         }
     }
 }  // namespace co

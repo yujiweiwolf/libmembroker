@@ -3,13 +3,14 @@ broker:
   wal: wal:///../data/trade.broker.wal?keep=5
   enable_upload: true
   query_asset_interval_ms: 0
-  query_position_interval_ms: 0
+  query_position_interval_ms: 5000
   query_knock_interval_ms: 0
   request_timeout_ms: 5000
   enable_query_only: false
   enable_stock_short_selling: false
   idle_sleep_ns: 1000000
   cpu_affinity: 0
+  node_name: 华泰金桥2机房浩睿股票交易Broker
 # 一台服务器上， 不管多少个broker, 共用这两块内存
   mem_dir: ../data
   mem_req_file: broker_req

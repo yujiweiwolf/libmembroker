@@ -61,6 +61,9 @@ namespace co {
         inline bool enable_upload() const {
             return enable_upload_;
         }
+        inline std::string node_name() const {
+            return node_name_;
+        }
         inline std::string mem_dir() const {
             return mem_dir_;
         }
@@ -76,6 +79,7 @@ namespace co {
         std::shared_ptr<x::LoggingOptions> log_opt_;
         std::string trade_gateway_;
         std::string wal_;
+        std::string node_name_;
 
         bool enable_upload_ = true; // 是否启用上传交易数据
 
