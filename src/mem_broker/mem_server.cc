@@ -40,8 +40,9 @@ namespace co {
         }
 
         inner_writer_.Open("../data", kInnerBrokerFile, kInnerBrokerMemSize << 20, true);
+        rep_writer_.Open(opt_->mem_dir(), opt_->mem_rep_file(), kRepMemSize << 20, true);
 
-        broker_->Init(*opt_, this);
+        broker_->Init(*opt_, this, &inner_writer_, &rep_writer_);
 
         enable_upload_asset_ = opt_->enable_upload() && opt_->query_asset_interval_ms() > 0;
         enable_upload_position_ = opt_->enable_upload() && opt_->query_position_interval_ms() > 0;
@@ -144,6 +145,7 @@ namespace co {
         int64_t asset_timeout_ms = query_asset_ms < 5000 ? 5000 : query_asset_ms;
         int64_t position_timeout_ms = query_position_ms < 10000 ? 10000 : query_position_ms;
         int64_t knock_timeout_ms = query_knock_ms < 10000 ? 10000 : query_knock_ms;
+        int64_t start_time = x::Timestamp();
         while (true) {
             x::Sleep(100);
             int64_t now = x::Timestamp();
@@ -177,8 +179,14 @@ namespace co {
                     string fund_id = ctx->fund_id();
                     req->timestamp = x::RawDateTime();
                     strncpy(req->id, id.c_str(), id.length());
+//                    int64_t delay_s = (now - start_time) / 1000;
+//                    if (delay_s > 100 && delay_s < 200) {
+//                        strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
+//                        LOG_INFO << "delay_s: " << delay_s;
+//                    }
                     strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
                     inner_writer_.CloseFrame(kMemTypeQueryTradePositionReq);
+                    LOG_INFO << "query pos contexts, fund_id: " << ctx->fund_id() << ", req_time: " << ctx->req_time();
                 }
             }
 
@@ -258,82 +266,6 @@ namespace co {
         DoWatch();
     }
 
-    bool MemBrokerServer::IsNewMemTradeAsset(MemTradeAsset* asset) {
-        bool flag = false;
-        string fund_id = asset->fund_id;
-        auto it = assets_.find(fund_id);
-        if (it == assets_.end()) {
-            flag = true;
-            assets_.insert(std::make_pair(fund_id, *asset));
-        } else {
-            double epsilon = 0.01;
-            MemTradeAsset* pre = &it->second;
-            if (std::fabs(asset->balance - pre->balance) >= epsilon ||
-                std::fabs(asset->usable - pre->usable) >= epsilon ||
-                std::fabs(asset->margin - pre->margin) >= epsilon ||
-                std::fabs(asset->equity - pre->equity) >= epsilon ||
-                std::fabs(asset->frozen - pre->frozen) >= epsilon ||
-                std::fabs(asset->long_margin_usable - pre->long_margin_usable) >= epsilon ||
-                std::fabs(asset->short_margin_usable - pre->short_margin_usable) >= epsilon ||
-                std::fabs(asset->short_return_usable - pre->short_return_usable) >= epsilon) {
-                flag = true;
-                assets_[fund_id] = *asset;
-            }
-        }
-        return flag;
-     }
-
-    bool MemBrokerServer::IsNewMemTradePosition(MemTradePosition* position) {
-        bool flag = false;
-        string fund_id = position->fund_id;
-        string code = position->code;
-        auto it = positions_.find(fund_id);
-        if (it == positions_.end()) {
-            flag = true;
-            std::shared_ptr<std::map<std::string, MemTradePosition>> pos = std::make_shared<std::map<std::string, MemTradePosition>>();
-            pos->insert(std::make_pair(code, *position));
-            positions_.insert(std::make_pair(fund_id, pos));
-        } else {
-            double epsilon = 0.01;
-            std::shared_ptr<std::map<std::string, MemTradePosition>> pos = it->second;
-            auto itor = pos->find(code);
-            if (itor == pos->end()) {
-                flag = true;
-                pos->insert(std::make_pair(code, *position));
-            } else {
-                MemTradePosition* pre = &itor->second;
-                double epsilon = 0.01;
-                if (position->long_volume != pre->long_volume ||
-                    std::fabs(position->long_market_value - pre->long_market_value) >= epsilon ||
-                    position->long_can_close != pre->long_can_close ||
-                    position->short_volume != pre->short_volume ||
-                    std::fabs(position->short_market_value - pre->short_market_value) >= epsilon ||
-                    position->short_can_close != pre->short_can_close) {
-                    flag = true;
-                    itor->second = *position;
-                }
-            }
-        }
-        pos_code_.insert(code);
-        return flag;
-     }
-
-    void MemBrokerServer::UpdataZeroPosition(const string& fund_id) {
-        auto it = positions_.find(fund_id);
-        if (it != positions_.end()) {
-            std::shared_ptr<std::map<std::string, MemTradePosition>> pos = it->second;
-            for (auto itor = pos->begin(); itor != pos->end();) {
-                if (auto item = pos_code_.find(itor->first); item == pos_code_.end()) {
-                    LOG_INFO << "fund_id: " << fund_id << ", code: " << itor->second.code << " pos is zero";
-                    itor = pos->erase(itor);
-                } else {
-                    ++itor;
-                }
-            }
-        }
-        pos_code_.clear();
-     }
-
     bool MemBrokerServer::MemBrokerServer::IsNewMemTradeKnock(MemTradeKnock* knock) {
         bool flag = false;
         string fund_id = knock->fund_id;
@@ -377,7 +309,29 @@ namespace co {
         auto first = (MemTradeAsset*)((char*)rep + sizeof(MemGetTradeAssetMessage));
         for (int i = 0; i < rep->items_size; i++) {
             MemTradeAsset *asset = first + i;
-            LOG_INFO << "[DATA][ASSET] update asset: fund_id: " << fund_id
+            bool flag = false;
+            string fund_id = asset->fund_id;
+            auto it = assets_.find(fund_id);
+            if (it == assets_.end()) {
+                flag = true;
+                assets_.insert(std::make_pair(fund_id, *asset));
+            } else {
+                double epsilon = 0.01;
+                MemTradeAsset* pre = &it->second;
+                if (std::fabs(asset->balance - pre->balance) >= epsilon ||
+                    std::fabs(asset->usable - pre->usable) >= epsilon ||
+                    std::fabs(asset->margin - pre->margin) >= epsilon ||
+                    std::fabs(asset->equity - pre->equity) >= epsilon ||
+                    std::fabs(asset->frozen - pre->frozen) >= epsilon ||
+                    std::fabs(asset->long_margin_usable - pre->long_margin_usable) >= epsilon ||
+                    std::fabs(asset->short_margin_usable - pre->short_margin_usable) >= epsilon ||
+                    std::fabs(asset->short_return_usable - pre->short_return_usable) >= epsilon) {
+                    flag = true;
+                    assets_[fund_id] = *asset;
+                }
+            }
+            if (flag) {
+                LOG_INFO << "[DATA][ASSET] update asset: fund_id: " << fund_id
                      << ", timestamp: " << asset->timestamp
                      << ", balance: " << asset->balance
                      << ", usable: " << asset->usable
@@ -386,6 +340,10 @@ namespace co {
                      << ", long_margin_usable: " << asset->long_margin_usable
                      << ", short_margin_usable: " << asset->short_margin_usable
                      << ", short_return_usable: " << asset->short_return_usable;
+                void* buffer = rep_writer_.OpenFrame(sizeof(MemTradeAsset));
+                memcpy(buffer, asset, sizeof(MemTradeAsset));
+                rep_writer_.CloseFrame(kMemTypeTradeAsset);
+            }
         }
     }
 
@@ -427,16 +385,75 @@ namespace co {
         auto item = (MemTradePosition*)((char*)rep + sizeof(MemGetTradePositionMessage));
         for (int i = 0; i < rep->items_size; i++) {
             MemTradePosition *position = item + i;
-            LOG_INFO << "[DATA][POSITION] update position: fund_id: " << fund_id
-                 << ", timestamp: " << rep->timestamp
-                 << ", code: " << position->code
-                 << ", long_volume: " << position->long_volume
-                 << ", long_market_value: " << position->long_market_value
-                 << ", long_can_close: " << position->long_can_close
-                 << ", short_volume: " << position->short_volume
-                 << ", short_market_value: " << position->short_market_value
-                 << ", short_can_open: " << position->short_can_open;
+            bool flag = false;
+            string fund_id = position->fund_id;
+            string code = position->code;
+            auto it = positions_.find(fund_id);
+            if (it == positions_.end()) {
+                flag = true;
+                std::shared_ptr<std::map<std::string, MemTradePosition>> pos = std::make_shared<std::map<std::string, MemTradePosition>>();
+                pos->insert(std::make_pair(code, *position));
+                positions_.insert(std::make_pair(fund_id, pos));
+            } else {
+                double epsilon = 0.01;
+                std::shared_ptr<std::map<std::string, MemTradePosition>> pos = it->second;
+                auto itor = pos->find(code);
+                if (itor == pos->end()) {
+                    flag = true;
+                    pos->insert(std::make_pair(code, *position));
+                } else {
+                    MemTradePosition* pre = &itor->second;
+                    double epsilon = 0.01;
+                    if (position->long_volume != pre->long_volume ||
+                        std::fabs(position->long_market_value - pre->long_market_value) >= epsilon ||
+                        position->long_can_close != pre->long_can_close ||
+                        position->short_volume != pre->short_volume ||
+                        std::fabs(position->short_market_value - pre->short_market_value) >= epsilon ||
+                        position->short_can_close != pre->short_can_close) {
+                        flag = true;
+                        itor->second = *position;
+                    }
+                }
+            }
+            pos_code_.insert(code);
+            if (flag) {
+                LOG_INFO << "[DATA][POSITION] update position: fund_id: " << fund_id
+                         << ", timestamp: " << rep->timestamp
+                         << ", code: " << position->code
+                         << ", long_volume: " << position->long_volume
+                         << ", long_market_value: " << position->long_market_value
+                         << ", long_can_close: " << position->long_can_close
+                         << ", short_volume: " << position->short_volume
+                         << ", short_market_value: " << position->short_market_value
+                         << ", short_can_open: " << position->short_can_open;
+                void* buffer = rep_writer_.OpenFrame(sizeof(MemTradePosition));
+                memcpy(buffer, position, sizeof(MemTradePosition));
+                rep_writer_.CloseFrame(kMemTypeTradePosition);
+            }
         }
+
+        // 删除持仓是0，api不返回对应持仓的问题
+        auto it = positions_.find(fund_id);
+        if (it != positions_.end()) {
+            std::shared_ptr<std::map<std::string, MemTradePosition>> pos = it->second;
+            for (auto itor = pos->begin(); itor != pos->end();) {
+                if (auto item = pos_code_.find(itor->first); item == pos_code_.end()) {
+                    LOG_INFO << "fund_id: " << fund_id << ", code: " << itor->second.code << " pos is zero";
+                    void* buffer = rep_writer_.OpenFrame(sizeof(MemTradePosition));
+                    MemTradePosition* new_pos = (MemTradePosition*) buffer;
+                    memset(new_pos, 0,  sizeof(MemTradePosition));
+                    strcpy(new_pos->code, itor->second.code);
+                    strcpy(new_pos->fund_id, itor->second.fund_id);
+                    new_pos->timestamp = itor->second.timestamp;
+                    new_pos->market = itor->second.market;
+                    rep_writer_.CloseFrame(kMemTypeTradePosition);
+                    itor = pos->erase(itor);
+                } else {
+                    ++itor;
+                }
+            }
+        }
+        pos_code_.clear();
     }
 
     void MemBrokerServer::SendQueryTradeKnockRep(MemGetTradeKnockMessage* rep) {
@@ -480,17 +497,27 @@ namespace co {
         for (int i = 0; i < rep->items_size; i++) {
             MemTradeKnock *knock = item + i;
             if (IsNewMemTradeKnock(knock)) {
+                void* buffer = rep_writer_.OpenFrame(sizeof(MemTradeKnock));
+                memcpy(buffer, knock, sizeof(MemTradeKnock));
+                MemTradeKnock* knock = (MemTradeKnock*)buffer;
+//                stringstream ss;
+//                ss << knock->order_no << "_" << knock->match_no << "_" << knock->code;
+//                string inner_match_no = ss.str();
+//                strcpy(knock->inner_match_no, inner_match_no.c_str());
+                rep_writer_.CloseFrame(kMemTypeTradeKnock);
                 LOG_INFO << "[DATA][KNOCK] update knock, fund_id: " << knock->fund_id
                          << ", code: " << knock->code
-                         << ", match_no: " << knock->match_no
                          << ", timestamp: " << knock->timestamp
                          << ", order_no: " << knock->order_no
+                         << ", match_no: " << knock->match_no
+                         << ", inner_match_no: " << knock->inner_match_no
                          << ", batch_no: " << knock->batch_no
                          << ", bs_flag: " << knock->bs_flag
                          << ", match_type: " << knock->match_type
                          << ", match_volume: " << knock->match_volume
                          << ", match_price: " << knock->match_price
-                         << ", match_amount: " << knock->match_amount;
+                         << ", match_amount: " << knock->match_amount
+                         ;
             }
         }
      }
@@ -609,6 +636,7 @@ namespace co {
             }
             text = ss.str();
         }
+
         if (text.empty() && active_task_timestamp_ > 0) { // 检查调用broker函数是否卡死
             int64_t begin_ts = active_task_timestamp_;
             if (begin_ts > 0) {
@@ -623,6 +651,7 @@ namespace co {
                 }
             }
         }
+
         if (text.empty() && !asset_contexts_.empty()) {
             int64_t min_time = 0;
             for (auto& itr : asset_contexts_) {
@@ -644,6 +673,8 @@ namespace co {
                 if (min_time <= 0 || ctx->last_success_time() < min_time) {
                     min_time = ctx->last_success_time();
                 }
+                LOG_INFO << "query pos contexts, fund_id: " << ctx->fund_id() << ", req_time: " << ctx->req_time()
+                                << ", rep_time: " << ctx->rep_time() << ", last_success_time: " << ctx->last_success_time();
             }
             int64_t delay_s = (x::Timestamp() - min_time) / 1000;
             if (delay_s > 60) {

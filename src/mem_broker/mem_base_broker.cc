@@ -16,13 +16,14 @@ namespace co {
     MemBroker::~MemBroker() {
     }
 
-    void MemBroker::Init(const MemBrokerOptions& opt, MemBrokerServer* server) {
+    void MemBroker::Init(const MemBrokerOptions& opt, MemBrokerServer* server, x::MMapWriter* inner_writer, x::MMapWriter* rep_writer) {
         try {
             LOG_INFO << "initialize broker ...";
             server_ = server;
+            inner_writer_ = inner_writer;
+            rep_writer_ = rep_writer;
             enable_stock_short_selling_ = opt.enable_stock_short_selling();
             request_timeout_ms_ = opt.request_timeout_ms();
-            rep_writer_.Open(opt.mem_dir(), opt.mem_rep_file(), kRepMemSize << 20, true);
             OnInit();
             LOG_INFO << "initialize broker ok";
         } catch (std::exception& e) {
@@ -73,14 +74,14 @@ namespace co {
         server_->OnStart();
     }
 
-    void* MemBroker::CreateMemBuffer(int64_t length) {
-        void* buffer = rep_writer_.OpenFrame(length);
-        return buffer;
-    }
-
-    void MemBroker::PushMemBuffer(int64_t function) {
-        rep_writer_.CloseFrame(function);
-    }
+//    void* MemBroker::CreateMemBuffer(int64_t length) {
+//        void* buffer = rep_writer_->OpenFrame(length);
+//        return buffer;
+//    }
+//
+//    void MemBroker::PushMemBuffer(int64_t function) {
+//        rep_writer_->CloseFrame(function);
+//    }
 
 //    void MemBroker::SendQueryTradeAssetRep(MemTradeAsset* data) {
 //        int length = sizeof(MemTradeAsset);
@@ -103,20 +104,36 @@ namespace co {
 //        rep_writer_.CloseFrame(kMemTypeTradeKnock);
 //    }
 
-    bool MemBroker::IsNewMemTradeAsset(MemTradeAsset* asset) {
-        return server_->IsNewMemTradeAsset(asset);
-    }
+//    bool MemBroker::IsNewMemTradeAsset(MemTradeAsset* asset) {
+//        return server_->IsNewMemTradeAsset(asset);
+//    }
+//
+//    bool MemBroker::IsNewMemTradePosition(MemTradePosition* pos) {
+//        return server_->IsNewMemTradePosition(pos);
+//    }
+//
+//    void MemBroker::UpdataZeroPosition(const string& fund_id) {
+//        return server_->UpdataZeroPosition(fund_id);
+//    }
+//
+//    bool MemBroker::IsNewMemTradeKnock(MemTradeKnock* knock) {
+//        return server_->IsNewMemTradeKnock(knock);
+//    }
 
-    bool MemBroker::IsNewMemTradePosition(MemTradePosition* pos) {
-        return server_->IsNewMemTradePosition(pos);
-    }
-
-    void MemBroker::UpdataZeroPosition(const string& fund_id) {
-        return server_->UpdataZeroPosition(fund_id);
-    }
-
-    bool MemBroker::IsNewMemTradeKnock(MemTradeKnock* knock) {
-        return server_->IsNewMemTradeKnock(knock);
+    void MemBroker::CreateInnerMatchNo(MemTradeKnock* knock) {
+        size_t index = 0;
+        size_t i = 0;
+        for (i = 0; i < strlen(knock->order_no); ++i) {
+            knock->inner_match_no[index++] = knock->order_no[i];
+        }
+        knock->inner_match_no[index++] = '_';
+        for (i = 0; i < strlen(knock->match_no); ++i) {
+            knock->inner_match_no[index++] = knock->match_no[i];
+        }
+        knock->inner_match_no[index++] = '_';
+        for (i = 0; i < strlen(knock->code); ++i) {
+            knock->inner_match_no[index++] = knock->code[i];
+        }
     }
 
     void MemBroker::SendQueryTradeAsset(MemGetTradeAssetMessage* req) {
@@ -127,14 +144,13 @@ namespace co {
             CheckTimeout(req->timestamp, request_timeout_ms_);
             OnQueryTradeAsset(req);
         } catch (std::exception & e) {
-            std::string error = e.what();
-            int length = sizeof(MemGetTradeAssetMessage);
-            void* buffer = rep_writer_.OpenFrame(length);
+            std::string error = string(req->fund_id) + " query asset faild, " + string(e.what());
+            int length = sizeof(MemMonitorRiskMessage);
+            void* buffer = rep_writer_->OpenFrame(length);
             memcpy(buffer, (void*)req, length);
-            MemGetTradeAssetMessage* rep = (MemGetTradeAssetMessage*)buffer;
+            MemMonitorRiskMessage* rep = (MemMonitorRiskMessage*)buffer;
             strncpy(rep->error, error.c_str(), kMemErrorSize - 1);
-            rep->items_size = 0;
-            rep_writer_.CloseFrame(kMemTypeQueryTradeAssetRep);
+            rep_writer_->CloseFrame(kMemTypeMonitorRisk);
         }
         server_->EndTask();
     }
@@ -147,14 +163,13 @@ namespace co {
             CheckTimeout(req->timestamp, request_timeout_ms_);
             OnQueryTradePosition(req);
         } catch (std::exception & e) {
-            std::string error = e.what();
-            int length = sizeof(MemGetTradePositionMessage);
-            void* buffer = rep_writer_.OpenFrame(length);
+            std::string error = string(req->fund_id) + " query pos faild, " + string(e.what());
+            int length = sizeof(MemMonitorRiskMessage);
+            void* buffer = rep_writer_->OpenFrame(length);
             memcpy(buffer, (void*)req, length);
-            MemGetTradePositionMessage* rep = (MemGetTradePositionMessage*)buffer;
+            MemMonitorRiskMessage* rep = (MemMonitorRiskMessage*)buffer;
             strncpy(rep->error, error.c_str(), kMemErrorSize - 1);
-            rep->items_size = 0;
-            rep_writer_.CloseFrame(kMemTypeQueryTradePositionRep);
+            rep_writer_->CloseFrame(kMemTypeMonitorRisk);
         }
         server_->EndTask();
     }
@@ -175,14 +190,13 @@ namespace co {
             CheckTimeout(req->timestamp, request_timeout_ms_);
             OnQueryTradeKnock(req);
         } catch (std::exception & e) {
-            std::string error = e.what();
-            int length = sizeof(MemGetTradeKnockMessage);
-            void* buffer = rep_writer_.OpenFrame(length);
+            std::string error = string(req->fund_id) + " query pos knock, " + string(e.what());
+            int length = sizeof(MemMonitorRiskMessage);
+            void* buffer = rep_writer_->OpenFrame(length);
             memcpy(buffer, (void*)req, length);
-            MemGetTradeKnockMessage* rep = (MemGetTradeKnockMessage*)buffer;
+            MemMonitorRiskMessage* rep = (MemMonitorRiskMessage*)buffer;
             strncpy(rep->error, error.c_str(), kMemErrorSize - 1);
-            rep->items_size = 0;
-            rep_writer_.CloseFrame(kMemTypeQueryTradeKnockRep);
+            rep_writer_->CloseFrame(kMemTypeMonitorRisk);
         }
         server_->EndTask();
     }
@@ -242,12 +256,12 @@ namespace co {
                 error = "EmptyError";
             }
             int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * req->items_size;
-            void* buffer = rep_writer_.OpenFrame(length);
+            void* buffer = rep_writer_->OpenFrame(length);
             MemTradeOrderMessage* rep = (MemTradeOrderMessage*)buffer;
             memcpy(rep, req, length);
             strncpy(rep->error, error.c_str(), kMemErrorSize - 1);
             rep->rep_time = x::RawDateTime();
-            rep_writer_.CloseFrame(kMemTypeTradeOrderRep);
+            rep_writer_->CloseFrame(kMemTypeTradeOrderRep);
         }
         server_->EndTask();
     }
@@ -265,35 +279,35 @@ namespace co {
                 error = "EmptyError";
             }
             int length = sizeof(MemTradeWithdrawMessage);
-            void* buffer = rep_writer_.OpenFrame(length);
+            void* buffer = rep_writer_->OpenFrame(length);
             MemTradeWithdrawMessage* rep = (MemTradeWithdrawMessage*)buffer;
             memcpy(rep, req, length);
             strncpy(rep->error, error.c_str(), kMemErrorSize - 1);
             rep->rep_time = x::RawDateTime();
-            rep_writer_.CloseFrame(kMemTypeTradeWithdrawRep);
+            rep_writer_->CloseFrame(kMemTypeTradeWithdrawRep);
         }
         server_->EndTask();
     }
 
     void MemBroker::SendHeartBeat() {
-        // LOG_INFO << "SendHeartBeat, " << x::RawDateTime();
-        for (auto it = accounts_.begin(); it != accounts_.end(); ++it) {
-            int length = sizeof(HeartBeatMessage);
-            void* buffer = rep_writer_.OpenFrame(length);
-            HeartBeatMessage* msg = (HeartBeatMessage*) buffer;
-            strcpy(msg->fund_id, it->second.fund_id);
-            msg->timestamp = x::RawDateTime();
-            rep_writer_.CloseFrame(kMemTypeHeartBeat);
-        }
+//        LOG_INFO << "SendHeartBeat, " << x::RawDateTime();
+//        for (auto it = accounts_.begin(); it != accounts_.end(); ++it) {
+//            int length = sizeof(HeartBeatMessage);
+//            void* buffer = rep_writer_.OpenFrame(length);
+//            HeartBeatMessage* msg = (HeartBeatMessage*) buffer;
+//            strcpy(msg->fund_id, it->second.fund_id);
+//            msg->timestamp = x::RawDateTime();
+//            rep_writer_.CloseFrame(kMemTypeHeartBeat);
+//        }
     }
 
     void MemBroker::SendRiskMessage(const string& error) {
         int length = sizeof(MemMonitorRiskMessage);
-        void* buffer = rep_writer_.OpenFrame(length);
+        void* buffer = rep_writer_->OpenFrame(length);
         MemMonitorRiskMessage* msg = (MemMonitorRiskMessage*) buffer;
         msg->timestamp = x::RawDateTime();
         strncpy(msg->error, error.c_str(), error.length() > sizeof(msg->error) ? sizeof(msg->error): error.length());
-        rep_writer_.CloseFrame(kMemTypeMonitorRisk);
+        rep_writer_->CloseFrame(kMemTypeMonitorRisk);
     }
 
     void MemBroker::SendTradeKnock(MemTradeKnock* knock) {

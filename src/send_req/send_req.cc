@@ -13,7 +13,7 @@ using namespace co;
 namespace po = boost::program_options;
 #define NUM_ORDER 1
 
-const char fund_id[] = "S1";
+const char fund_id[] = "S1111";
 const char mem_dir[] = "../data";
 const char mem_req_file[] = "broker_req";
 const char mem_rep_file[] = "broker_rep";
@@ -102,54 +102,30 @@ void ReadRep() {
             LOG_INFO << "收到撤单响应, " << ToString(rep);
         } else if (type == kMemTypeTradeKnock) {
             MemTradeKnock* msg = (MemTradeKnock*) data;
-            LOG_INFO << "成交推送, " << ToString(msg);
-        } else if (type == kMemTypeQueryTradeAssetRep) {
-            MemGetTradeAssetMessage* rep = (MemGetTradeAssetMessage*) data;
-            auto item = (MemTradeAsset*)((char*)rep + sizeof(MemGetTradeAssetMessage));
-            for (int i = 0; i < rep->items_size; i++) {
-                MemTradeAsset *asset = item + i;
-                LOG_INFO << "查询资金响应, fund_id: " << fund_id
-                         << ", timestamp: " << asset->timestamp
-                         << ", balance: " << asset->balance
-                         << ", usable: " << asset->usable
-                         << ", margin: " << asset->margin
-                         << ", equity: " << asset->equity
-                         << ", long_margin_usable: " << asset->long_margin_usable
-                         << ", short_margin_usable: " << asset->short_margin_usable
-                         << ", short_return_usable: " << asset->short_return_usable;
-            }
-        } else if (type == kMemTypeQueryTradePositionRep) {
-            MemGetTradePositionMessage* rep = (MemGetTradePositionMessage*) data;
-            auto item = (MemTradePosition*)((char*)rep + sizeof(MemGetTradePositionMessage));
-            for (int i = 0; i < rep->items_size; i++) {
-                MemTradePosition *position = item + i;
-                LOG_INFO << "查询持仓响应, fund_id: " << fund_id
-                         << ", timestamp: " << rep->timestamp
-                         << ", code: " << position->code
-                         << ", long_volume: " << position->long_volume
-                         << ", long_market_value: " << position->long_market_value
-                         << ", long_can_close: " << position->long_can_close
-                         << ", short_volume: " << position->short_volume
-                         << ", short_market_value: " << position->short_market_value
-                         << ", short_can_open: " << position->short_can_open;
-            }
-        } else if (type == kMemTypeQueryTradeKnockRep) {
-            MemGetTradeKnockMessage* rep = (MemGetTradeKnockMessage*) data;
-            auto item = (MemTradeKnock*)((char*)rep + sizeof(MemGetTradeKnockMessage));
-            for (int i = 0; i < rep->items_size; i++) {
-                MemTradeKnock *knock = item + i;
-                LOG_INFO << "查询成交响应, fund_id: " << knock->fund_id
-                         << ", code: " << knock->code
-                         << ", match_no: " << knock->match_no
-                         << ", timestamp: " << knock->timestamp
-                         << ", order_no: " << knock->order_no
-                         << ", batch_no: " << knock->batch_no
-                         << ", bs_flag: " << knock->bs_flag
-                         << ", match_type: " << knock->match_type
-                         << ", match_volume: " << knock->match_volume
-                         << ", match_price: " << knock->match_price
-                         << ", match_amount: " << knock->match_amount;
-            }
+            LOG_INFO << "成交, " << ToString(msg);
+        } else if (type == kMemTypeTradeAsset) {
+            MemTradeAsset *asset = (MemTradeAsset*) data;
+            LOG_INFO << "资金变更, fund_id: " << asset->fund_id
+                     << ", timestamp: " << asset->timestamp
+                     << ", balance: " << asset->balance
+                     << ", usable: " << asset->usable
+                     << ", margin: " << asset->margin
+                     << ", equity: " << asset->equity
+                     << ", long_margin_usable: " << asset->long_margin_usable
+                     << ", short_margin_usable: " << asset->short_margin_usable
+                     << ", short_return_usable: " << asset->short_return_usable;
+
+        } else if (type == kMemTypeTradePosition) {
+            MemTradePosition* position = (MemTradePosition*) data;
+            LOG_INFO << "持仓变更, code: " << position->code
+                     << ", fund_id: " << position->fund_id
+                     << ", timestamp: " << position->timestamp
+                     << ", long_volume: " << position->long_volume
+                     << ", long_market_value: " << position->long_market_value
+                     << ", long_can_close: " << position->long_can_close
+                     << ", short_volume: " << position->short_volume
+                     << ", short_market_value: " << position->short_market_value
+                     << ", short_can_open: " << position->short_can_open;
         } else if (type == kMemTypeMonitorRisk) {
             MemMonitorRiskMessage* msg = (MemMonitorRiskMessage*) data;
             LOG_ERROR << "Risk, " << msg->error << ", timestamp: " << msg->timestamp;

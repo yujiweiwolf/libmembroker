@@ -22,7 +22,7 @@ class MemBroker {
     MemBroker();
     virtual ~MemBroker();
 
-    void Init(const MemBrokerOptions& opt, MemBrokerServer* server);
+    void Init(const MemBrokerOptions& opt, MemBrokerServer* server, x::MMapWriter* inner_writer, x::MMapWriter* rep_writer);
 
     const std::map<string, MemTradeAccount>& GetAccounts() const;
     co::MemTradeAccount* GetAccount(const string& fund_id);
@@ -49,15 +49,17 @@ class MemBroker {
     // 自动开平， 启始化时查询持仓
     void OnStart();
 
-    void* CreateMemBuffer(int64_t length);
+//    void* CreateMemBuffer(int64_t length);
+//
+//    void PushMemBuffer(int64_t function);
+//
+//    // broker中的查询，回写共享内存前，先判断
+//    bool IsNewMemTradeAsset(MemTradeAsset* asset);
+//    bool IsNewMemTradePosition(MemTradePosition* pos);
+//    void UpdataZeroPosition(const string& fund_id);
+//    bool IsNewMemTradeKnock(MemTradeKnock* knock);
 
-    void PushMemBuffer(int64_t function);
-
-    // broker中的查询，回写共享内存前，先判断
-    bool IsNewMemTradeAsset(MemTradeAsset* asset);
-    bool IsNewMemTradePosition(MemTradePosition* pos);
-    void UpdataZeroPosition(const string& fund_id);
-    bool IsNewMemTradeKnock(MemTradeKnock* knock);
+    void CreateInnerMatchNo(MemTradeKnock* knock);
 
  protected:
     /**
@@ -77,7 +79,9 @@ class MemBroker {
 
     int64_t CheckTimeout(int64_t request_time, int64_t ttl_ms);
 
-    x::MMapWriter rep_writer_;
+    x::MMapWriter* rep_writer_;
+
+    x::MMapWriter* inner_writer_;
 
  private:
     MemBrokerServer* server_ = nullptr;

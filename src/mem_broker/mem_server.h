@@ -175,7 +175,8 @@ namespace co {
         std::set<std::string> pos_code_;
 
         int64_t active_task_timestamp_ = 0; // 正在执行任务的开始时间
-        x::MMapWriter inner_writer_;  // 内部使用，1秒钟写一次，供server检查查询与报撤单是否有响应使用
+        x::MMapWriter inner_writer_;  // 内部使用
+        x::MMapWriter rep_writer_;
         int64_t start_time_ = 0;
         int64_t wait_size_ = 0;  // 查询待处理的消息队列
         int64_t last_heart_beat_ = 0;
