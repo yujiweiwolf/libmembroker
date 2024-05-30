@@ -77,7 +77,7 @@ namespace co {
 #endif
         // LOG_INFO << "回写报单回报";
         int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * req->items_size;
-        void* buffer = rep_writer_->OpenFrame(length);
+        char buffer[length] = "";
         memcpy(buffer, req, length);
         MemTradeOrderMessage* rep = (MemTradeOrderMessage*)buffer;
         if (rep->items_size > 1) {
@@ -91,12 +91,12 @@ namespace co {
             strcpy(order->order_no, order_no.c_str());
         }
         rep->rep_time = x::RawDateTime();
-        rep_writer_->CloseFrame(kMemTypeTradeOrderRep);
+        SendRtnMessage(string(buffer, length), kMemTypeTradeOrderRep);
         {
             for (int i = 0; i < rep->items_size; i++) {
                 MemTradeOrder* order = items + i;
                 int length = sizeof(MemTradeKnock);
-                void* buffer = rep_writer_->OpenFrame(length);
+                char buffer[length] = "";
                 MemTradeKnock* knock = (MemTradeKnock*) buffer;
                 knock->timestamp = x::RawDateTime();
                 strcpy(knock->fund_id, rep->fund_id);
@@ -126,8 +126,7 @@ namespace co {
                     strcpy(knock->match_no, match_no.c_str());
                     strcpy(knock->error, "报单价格不正确");
                 }
-                CreateInnerMatchNo(knock);
-                rep_writer_->CloseFrame(kMemTypeTradeKnock);
+                SendRtnMessage(string(buffer, length), kMemTypeTradeKnock);
             }
         }
     }
@@ -147,30 +146,30 @@ namespace co {
 #endif
         LOG_INFO << "回写撤单回报";
         int length = sizeof(MemTradeWithdrawMessage);
-        void* buffer = rep_writer_->OpenFrame(length);
+        char buffer[length] = "";
         memcpy(buffer, req, length);
         MemTradeWithdrawMessage* rep = (MemTradeWithdrawMessage*)buffer;
         if (rep->rep_time % 2 == 0) {
             strcpy(rep->error, "撤单错误，报单已成交");
         }
         rep->rep_time = x::RawDateTime();
-        rep_writer_->CloseFrame(kMemTypeTradeWithdrawRep);
+        SendRtnMessage(string(buffer, length), kMemTypeTradeWithdrawRep);
         if (rep->rep_time % 2 != 0) {
             int length = sizeof(MemTradeKnock);
-            void* buffer = rep_writer_->OpenFrame(length);
+            char buffer[length] = "";
             MemTradeKnock* knock = (MemTradeKnock*) buffer;
             knock->timestamp = x::RawDateTime();
             strcpy(knock->fund_id, rep->fund_id);
             strcpy(knock->code, "600000.SH");
             strcpy(knock->order_no, rep->order_no);
+            knock->bs_flag = 1;
             knock->match_volume = 100;
             knock->match_type = co::kMatchTypeWithdrawOK;
             knock->match_price = 0;
             knock->match_amount = 0;
             string match_no = "_" + string(knock->order_no);
             strcpy(knock->match_no, match_no.c_str());
-            CreateInnerMatchNo(knock);
-            rep_writer_->CloseFrame(kMemTypeTradeKnock);
+            SendRtnMessage(string(buffer, length), kMemTypeTradeKnock);
         }
     }
 
@@ -182,11 +181,9 @@ namespace co {
                 auto& item = it->second;
                 switch (item.first) {
                     case kMemTypeTradeOrderReq: {
-
                         break;
                     }
                     case kMemTypeTradeWithdrawReq: {
-                        LOG_INFO << "回写撤单回报";
                         break;
                     }
                     case kMemTypeQueryTradeAssetReq: {
@@ -202,7 +199,7 @@ namespace co {
                         asset.usable = 23.0;
 
                         int length = sizeof(MemGetTradeAssetMessage) + sizeof(MemTradeAsset) * total_num;
-                        void* buffer = inner_writer_->OpenFrame(length);
+                        char buffer[length] = "";
                         MemGetTradeAssetMessage* rep = (MemGetTradeAssetMessage*)buffer;
                         memcpy(rep, req, sizeof(MemGetTradeAssetMessage));
                         rep->items_size = total_num;
@@ -213,7 +210,7 @@ namespace co {
                                 memcpy(item, &asset, sizeof(MemTradeAsset));
                             }
                         }
-                        inner_writer_->CloseFrame(kMemTypeQueryTradeAssetRep);
+                        SendRtnMessage(string(buffer, length), kMemTypeQueryTradeAssetRep);
                         break;
                     }
                     case kMemTypeQueryTradePositionReq: {
@@ -235,7 +232,7 @@ namespace co {
                         }
                         int total_num = tmp_pos.size();
                         int length = sizeof(MemGetTradePositionMessage) + sizeof(MemTradePosition) * total_num;
-                        void* buffer = inner_writer_->OpenFrame(length);
+                        char buffer[length] = "";
                         MemGetTradePositionMessage* rep = (MemGetTradePositionMessage*)buffer;
                         memcpy(rep, req, sizeof(MemGetTradePositionMessage));
                         rep->items_size = total_num;
@@ -246,7 +243,7 @@ namespace co {
                                 memcpy(pos, &tmp_pos[i], sizeof(MemTradePosition));
                             }
                         }
-                        inner_writer_->CloseFrame(kMemTypeQueryTradePositionRep);
+                        SendRtnMessage(string(buffer, length), kMemTypeQueryTradePositionRep);
                         break;
                     }
                     case kMemTypeQueryTradeKnockReq: {
@@ -267,12 +264,11 @@ namespace co {
                             knock.match_type = 1;
                             knock.match_price = 10 + 0.01 * i;
                             knock.match_amount = knock.match_volume * knock.match_volume;
-                            CreateInnerMatchNo(&knock);
                             tmp_knock.push_back(knock);
                         }
                         int total_num = tmp_knock.size();
                         int length = sizeof(MemGetTradeKnockMessage) + sizeof(MemTradeKnock) * total_num;
-                        void* buffer = inner_writer_->OpenFrame(length);
+                        char buffer[length] = "";
                         MemGetTradeKnockMessage* rep = (MemGetTradeKnockMessage*)buffer;
                         memcpy(rep, req, sizeof(MemGetTradeKnockMessage));
                         rep->items_size = total_num;
@@ -283,7 +279,7 @@ namespace co {
                                 memcpy(knock, &tmp_knock[i], sizeof(MemTradeKnock));
                             }
                         }
-                        inner_writer_->CloseFrame(kMemTypeQueryTradeKnockRep);
+                        SendRtnMessage(string(buffer, length), kMemTypeQueryTradeKnockRep);
                         break;
                     }
                 }

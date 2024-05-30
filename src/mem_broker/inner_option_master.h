@@ -1,14 +1,10 @@
+// Copyright 2021 Fancapital Inc.  All rights reserved.
 #pragma once
-
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
-#include <map>
-#include <unordered_map>
-#include <memory>
-#include <mutex>
 #include <thread>
+#include <map>
+#include <string>
+#include <memory>
+#include <unordered_map>
 
 #include "x/x.h"
 #include "coral/coral.h"
@@ -29,7 +25,7 @@ class InnerOptionMaster {
     void HandleOrderRep(const std::string& fund_id, int64_t bs_flag, const MemTradeOrder& order);
     void HandleKnock(const MemTradeKnock* knock);
 
-   int64_t GetAutoOcFlag(const std::string& fund_id, int64_t bs_flag, const MemTradeOrder& order);
+    int64_t GetAutoOcFlag(const std::string& fund_id, int64_t bs_flag, const MemTradeOrder& order);
 
  protected:
     bool IsAccountInitialized(std::string fund_id);
@@ -39,8 +35,8 @@ class InnerOptionMaster {
     InnerOptionPositionPtr GetOrCreatePosition(std::string fund_id, std::string code, int64_t bs_flag);
 
  private:
-    std::map<std::string, std::shared_ptr<std::map<std::string, InnerOptionPositionPtr>>> positions_; // <fund_id> -> <code>_<bs_flag> -> obj
-    std::unordered_map<std::string, bool> knocks_; // <fund_id>_<inner_match_no> -> true
+    std::map<std::string, std::shared_ptr<std::map<std::string, InnerOptionPositionPtr>>> positions_;  // <fund_id> -> <code>_<bs_flag> -> obj
+    std::unordered_map<std::string, bool> knocks_;  // <fund_id>_<inner_match_no> -> true
 };
     typedef std::shared_ptr<InnerOptionMaster> InnerOptionMasterPtr;
 }  // namespace co

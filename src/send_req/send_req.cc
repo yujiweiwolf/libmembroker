@@ -3,6 +3,7 @@
 #include <sstream>
 #include <string>
 #include <boost/program_options.hpp>
+#include <boost/filesystem.hpp>
 #include "x/x.h"
 #include "coral/coral.h"
 #include "../mem_broker/mem_base_broker.h"
@@ -11,9 +12,9 @@
 using namespace std;
 using namespace co;
 namespace po = boost::program_options;
-#define NUM_ORDER 1
+#define NUM_ORDER 10
 
-const char fund_id[] = "S1111";
+const char fund_id[] = "S1";
 const char mem_dir[] = "../data";
 const char mem_req_file[] = "broker_req";
 const char mem_rep_file[] = "broker_rep";
@@ -88,6 +89,23 @@ void query_knock(x::MMapWriter* writer) {
 }
 
 void ReadRep() {
+    {
+        bool exit_flag = false;
+        if (boost::filesystem::exists(mem_dir)) {
+            boost::filesystem::path p(mem_dir);
+            for (auto &file : boost::filesystem::directory_iterator(p)) {
+                const string filename = file.path().filename().string();
+                if (filename.find(mem_rep_file) != filename.npos) {
+                    exit_flag = true;
+                    break;
+                }
+            }
+        }
+        if (!exit_flag) {
+            x::MMapWriter req_writer;
+            req_writer.Open(mem_dir, mem_rep_file, kReqMemSize << 20, true);
+        }
+    }
     const void* data = nullptr;
     x::MMapReader common_reader;
     common_reader.Open(mem_dir, mem_rep_file, true);
@@ -129,6 +147,9 @@ void ReadRep() {
         } else if (type == kMemTypeMonitorRisk) {
             MemMonitorRiskMessage* msg = (MemMonitorRiskMessage*) data;
             LOG_ERROR << "Risk, " << msg->error << ", timestamp: " << msg->timestamp;
+        } else if (type == kMemTypeHeartBeat) {
+            HeartBeatMessage* msg = (HeartBeatMessage*) data;
+            LOG_ERROR << "心跳, " << msg->fund_id << ", timestamp: " << msg->timestamp;
         }
     }
 }
@@ -139,17 +160,12 @@ int main(int argc, char* argv[]) {
         x::MMapWriter req_writer;
         req_writer.Open(mem_dir, mem_req_file, kReqMemSize << 20, true);
 
-        x::MMapWriter inner_writer;
-        inner_writer.Open("../data", kInnerBrokerFile, kInnerBrokerMemSize << 20, true);
+//        x::MMapWriter inner_writer;
+//        inner_writer.Open("../data", kInnerBrokerFile, kInnerBrokerMemSize << 20, true);
         string usage("\nTYPE  'q' to quit program\n");
         usage += "      '1' to order_sh\n";
         usage += "      '2' to order_sz\n";
         usage += "      '3' to withdraw_sh\n";
-        usage += "      '4' to withdraw_sz\n";
-        usage += "      '5' to query asset\n";
-        usage += "      '6' to query position\n";
-        usage += "      '7' to query order\n";
-        usage += "      '8' to query knock\n";
         cerr << (usage);
 
         char c;
@@ -175,12 +191,12 @@ int main(int argc, char* argv[]) {
             }
             case '5':
             {
-                query_asset(&inner_writer);
+                // query_asset(&inner_writer);
                 break;
             }
             case '6':
             {
-                query_position(&inner_writer);
+                // query_position(&inner_writer);
                 break;
             }
             case '7':
@@ -189,7 +205,7 @@ int main(int argc, char* argv[]) {
             }
             case '8':
             {
-                query_knock(&inner_writer);
+                // query_knock(&inner_writer);
                 break;
             }
             default:

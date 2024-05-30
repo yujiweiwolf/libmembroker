@@ -3,7 +3,7 @@ broker:
   wal: wal:///../data/trade.broker.wal?keep=5
   enable_upload: true
   query_asset_interval_ms: 0
-  query_position_interval_ms: 5000
+  query_position_interval_ms: 0
   query_knock_interval_ms: 0
   request_timeout_ms: 5000
   enable_query_only: false

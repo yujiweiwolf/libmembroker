@@ -1,3 +1,4 @@
+// Copyright 2021 Fancapital Inc.  All rights reserved.
 #include "inner_option_position.h"
 
 namespace co {

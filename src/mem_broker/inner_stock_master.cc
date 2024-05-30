@@ -1,12 +1,12 @@
+// Copyright 2021 Fancapital Inc.  All rights reserved.
 #include "inner_stock_master.h"
 
 namespace co {
-
     InnerStockMaster::InnerStockMaster() {
     }
 
     void InnerStockMaster::Clear() {
-        positions_.clear(); // 清空持仓
+        positions_.clear();
     }
 
     // T+0的合约，type须设置为1， 不管其有没有持仓
@@ -22,7 +22,7 @@ namespace co {
                 string code = position->code;
                 int64_t long_can_close = position->long_can_close;
                 int64_t short_can_open = position->short_can_open;
-                int64_t type = position->type; // 默认值是0， 1 表示 T + 0
+                int64_t type = position->type;  // 默认值是0， 1 表示 T + 0
                 // 普通卖
                 if (long_can_close > 0) {
                     InnerStockPositionPtr pos = GetOrCreatePosition(fund_id, code);
@@ -124,14 +124,14 @@ namespace co {
             return;
         }
         if (!IsAccountInitialized(fund_id)) {
-            return; // 没有初始化该资金账号的持仓，忽略
+            return;  // 没有初始化该资金账号的持仓，忽略
         }
         std::stringstream ss;
         ss << fund_id << "#" << inner_match_no;
         std::string key = ss.str();
         auto itr = knocks_.find(key);
         if (itr != knocks_.end()) {
-            return; // 该成交回报已处理过，忽略
+            return;  // 该成交回报已处理过，忽略
         }
         knocks_[key] = true;
         int64_t match_volume = knock->match_volume;
@@ -171,7 +171,7 @@ namespace co {
 
         int64_t oc_flag = kOcFlagAuto;
         if (!IsAccountInitialized(fund_id)) {
-            return kOcFlagAuto; // 没有初始化该资金账号的持仓，直接返回普通卖出
+            return kOcFlagAuto;  // 没有初始化该资金账号的持仓，直接返回普通卖出
         }
 
         InnerStockPositionPtr pos = GetOrCreatePosition(fund_id, order.code);

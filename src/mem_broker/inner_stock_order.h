@@ -1,5 +1,5 @@
+// Copyright 2021 Fancapital Inc.  All rights reserved.
 #pragma once
-
 #include <iostream>
 #include <sstream>
 #include <string>

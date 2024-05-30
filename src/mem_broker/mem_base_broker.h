@@ -1,18 +1,13 @@
+// Copyright 2021 Fancapital Inc.  All rights reserved.
 #pragma once
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
 #include <map>
+#include <string>
 #include <memory>
-#include "x/x.h"
-#include "coral/coral.h"
-#include "inner_option_master.h"
-#include "inner_stock_master.h"
 #include "options.h"
 #include "mem_struct.h"
+#include "inner_option_master.h"
+#include "inner_stock_master.h"
 
-using namespace std;
 namespace co {
 
 class  MemBrokerServer;
@@ -22,7 +17,7 @@ class MemBroker {
     MemBroker();
     virtual ~MemBroker();
 
-    void Init(const MemBrokerOptions& opt, MemBrokerServer* server, x::MMapWriter* inner_writer, x::MMapWriter* rep_writer);
+    void Init(const MemBrokerOptions& opt, MemBrokerServer* server, x::MMapWriter* rep_writer);
 
     const std::map<string, MemTradeAccount>& GetAccounts() const;
     co::MemTradeAccount* GetAccount(const string& fund_id);
@@ -35,13 +30,9 @@ class MemBroker {
     void SendTradeOrder(MemTradeOrderMessage* req);
     void SendTradeWithdraw(MemTradeWithdrawMessage* req);
 
+    void SendRtnMessage(const std::string& raw, int64_t type);
+
     void SetInitPositions(MemGetTradePositionMessage* rep, int8_t dtype);
-
-    // 响应内存写入心跳
-    void SendHeartBeat();
-
-    // 响应内存写入警告信息
-    void SendRiskMessage(const string& msg);
 
     // 自动开平，计算持仓
     void SendTradeKnock(MemTradeKnock* knock);
@@ -49,22 +40,7 @@ class MemBroker {
     // 自动开平， 启始化时查询持仓
     void OnStart();
 
-//    void* CreateMemBuffer(int64_t length);
-//
-//    void PushMemBuffer(int64_t function);
-//
-//    // broker中的查询，回写共享内存前，先判断
-//    bool IsNewMemTradeAsset(MemTradeAsset* asset);
-//    bool IsNewMemTradePosition(MemTradePosition* pos);
-//    void UpdataZeroPosition(const string& fund_id);
-//    bool IsNewMemTradeKnock(MemTradeKnock* knock);
-
-    void CreateInnerMatchNo(MemTradeKnock* knock);
-
  protected:
-    /**
-     * 回调函数，由broker具体实现
-     */
     virtual void OnInit();
 
     virtual void OnQueryTradeAsset(MemGetTradeAssetMessage* req);
@@ -79,17 +55,14 @@ class MemBroker {
 
     int64_t CheckTimeout(int64_t request_time, int64_t ttl_ms);
 
-    x::MMapWriter* rep_writer_;
-
-    x::MMapWriter* inner_writer_;
-
  private:
+    x::MMapWriter* rep_writer_;
     MemBrokerServer* server_ = nullptr;
     std::map<string, MemTradeAccount> accounts_;  // 支持的所有资金账号，由底层在on_init()初始化函数中填写， fund_id -> trade_type
-    bool enable_stock_short_selling_ = false; // 是否启用股票自动融券买卖
+    bool enable_stock_short_selling_ = false;  // 是否启用股票自动融券买卖
     int64_t request_timeout_ms_ = 0;
-    InnerOptionMaster inner_option_master_; // 期权内部持仓管理
-    InnerStockMaster inner_stock_master_; // 股票内部持仓管理
+    InnerOptionMaster inner_option_master_;  // 期权内部持仓管理
+    InnerStockMaster inner_stock_master_;  // 股票内部持仓管理
 };
 
 typedef std::shared_ptr<MemBroker> MemBrokerPtr;

@@ -1,5 +1,5 @@
+// Copyright 2021 Fancapital Inc.  All rights reserved.
 #pragma once
-
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -75,15 +75,15 @@ class InnerOptionPosition {
  private:
     std::string fund_id_;
     std::string code_;
-    int64_t bs_flag_ = 0; // 买卖标记：1-买入，2-卖出
-    int64_t yd_volume_ = 0; // 昨日持仓
-    int64_t yd_closing_volume_ = 0; // 昨日持仓平仓冻结数
-    int64_t yd_close_volume_ = 0; // 昨日持仓已平仓数
-    int64_t td_volume_ = 0; // 今日持仓
-    int64_t td_closing_volume_ = 0; // 今日持仓平仓冻结数
-    int64_t td_close_volume_ = 0; // 今日持仓已平仓数
-    int64_t td_opening_volume_ = 0; // 今日持仓开仓冻结数
-    int64_t td_open_volume_ = 0; // 今日持仓已开仓数
+    int64_t bs_flag_ = 0;  // 买卖标记：1-买入，2-卖出
+    int64_t yd_volume_ = 0;  // 昨日持仓
+    int64_t yd_closing_volume_ = 0;  // 昨日持仓平仓冻结数
+    int64_t yd_close_volume_ = 0;  // 昨日持仓已平仓数
+    int64_t td_volume_ = 0;  // 今日持仓
+    int64_t td_closing_volume_ = 0;  // 今日持仓平仓冻结数
+    int64_t td_close_volume_ = 0;  // 今日持仓已平仓数
+    int64_t td_opening_volume_ = 0;  // 今日持仓开仓冻结数
+    int64_t td_open_volume_ = 0;  // 今日持仓已开仓数
 };
     typedef std::shared_ptr<InnerOptionPosition> InnerOptionPositionPtr;
 }  // namespace co

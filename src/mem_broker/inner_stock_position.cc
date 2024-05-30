@@ -1,3 +1,5 @@
+// Copyright 2021 Fancapital Inc.  All rights reserved.
+#include <string>
 #include "inner_stock_position.h"
 
 namespace co {
@@ -22,5 +24,6 @@ namespace co {
             << "}";
         return ss.str();
     }
-}
+}  // namespace co
+
 

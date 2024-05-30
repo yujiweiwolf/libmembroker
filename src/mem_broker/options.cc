@@ -1,18 +1,16 @@
+// Copyright 2021 Fancapital Inc.  All rights reserved.
+#include <vector>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <regex>
 #include <filesystem>
-
 #include "yaml-cpp/yaml.h"
-
 #include "options.h"
 
+namespace fs = std::filesystem;
+
 namespace co {
-
-    namespace fs = std::filesystem;
-
-
     std::shared_ptr<MemBrokerOptions> MemBrokerOptions::Load(const std::string& filename) {
         auto getStr = [&](const YAML::Node& node, const std::string& name) {
             try {
@@ -105,5 +103,4 @@ namespace co {
             << log_opt_->ToString();
         return ss.str();
     }
-
-}
+}  // namespace co

@@ -1,9 +1,10 @@
+// Copyright 2021 Fancapital Inc.  All rights reserved.
 #include "inner_option_master.h"
 
 namespace co {
 
     void InnerOptionMaster::Clear() {
-        positions_.clear(); // 清空持仓
+        positions_.clear();
     }
 
     void InnerOptionMaster::SetInitPositions(MemGetTradePositionMessage* rep) {
@@ -58,7 +59,7 @@ namespace co {
             return;
         }
         if (!IsAccountInitialized(fund_id)) {
-            return; // 没有初始化该资金账号的持仓，忽略
+            return;  // 没有初始化该资金账号的持仓，忽略
         }
         // -------------------------------------------------------------------
         // 获取待更新的持仓
@@ -96,7 +97,7 @@ namespace co {
             return;
         }
         if (!IsAccountInitialized(fund_id)) {
-            return; // 没有初始化该资金账号的持仓，忽略
+            return;  // 没有初始化该资金账号的持仓，忽略
         }
         // -------------------------------------------------------------------
         // 获取待更新的持仓
@@ -140,14 +141,14 @@ namespace co {
             return;
         }
         if (!IsAccountInitialized(fund_id)) {
-            return; // 没有初始化该资金账号的持仓，忽略
+            return;  // 没有初始化该资金账号的持仓，忽略
         }
         std::stringstream ss;
         ss << fund_id << "#" << inner_match_no;
         std::string key = ss.str();
         auto itr = knocks_.find(key);
         if (itr != knocks_.end()) {
-            return; // 该成交回报已处理过，忽略
+            return;  // 该成交回报已处理过，忽略
         }
         knocks_[key] = true;
         int64_t match_volume = 0;
@@ -206,23 +207,23 @@ namespace co {
         // 4.3 卖平撤单：减少平仓冻结，增加持仓；
         switch (oc_flag) {
         case kOcFlagOpen:
-            if (order_volume > 0) { // 开仓委托：增加开仓冻结
+            if (order_volume > 0) {  // 开仓委托：增加开仓冻结
                 pos->set_td_opening_volume(pos->td_opening_volume() + order_volume);
             }
-            if (match_volume > 0) { // 开仓成交：减少开仓冻结，增加持仓，增加已开仓数
+            if (match_volume > 0) {  // 开仓成交：减少开仓冻结，增加持仓，增加已开仓数
                 pos->set_td_opening_volume(pos->td_opening_volume() - match_volume);
                 pos->set_td_volume(pos->td_volume() + match_volume);
                 pos->set_td_open_volume(pos->td_open_volume() + match_volume);
             }
-            if (withdraw_volume > 0) { // 开仓撤单：减少开仓冻结
+            if (withdraw_volume > 0) {  // 开仓撤单：减少开仓冻结
                 pos->set_td_opening_volume(pos->td_opening_volume() - withdraw_volume);
             }
             break;
-        case kOcFlagClose: // 平仓
+        case kOcFlagClose:  // 平仓
             // 先平昨后平今
-            if (order_volume > 0) { // 平仓委托：减少持仓，增加平仓冻结
-                int64_t yd = pos->yd_volume() >= order_volume ? order_volume : pos->yd_volume(); // 平昨委托数量
-                int64_t td = yd < order_volume ? order_volume - yd : 0; // 平今委托数量
+            if (order_volume > 0) {  // 平仓委托：减少持仓，增加平仓冻结
+                int64_t yd = pos->yd_volume() >= order_volume ? order_volume : pos->yd_volume();  // 平昨委托数量
+                int64_t td = yd < order_volume ? order_volume - yd : 0;  // 平今委托数量
                 if (yd > 0) {
                     pos->set_yd_closing_volume(pos->yd_closing_volume() + yd);
                     pos->set_yd_volume(pos->yd_volume() - yd);
@@ -234,7 +235,7 @@ namespace co {
                     pos->set_td_volume(td_volume);
                 }
             }
-            if (match_volume > 0) { // 平仓成交：减少平仓冻结，增加已平仓数
+            if (match_volume > 0) {  // 平仓成交：减少平仓冻结，增加已平仓数
                 int64_t yd = pos->yd_closing_volume() >= match_volume ? match_volume : pos->yd_closing_volume();
                 int64_t td = yd < match_volume ? match_volume - yd : 0;
                 if (yd > 0) {
@@ -250,7 +251,7 @@ namespace co {
                     pos->set_td_close_volume(td_close_volume);
                 }
             }
-            if (withdraw_volume > 0) { // 平仓撤单：减少平仓冻结，增加持仓
+            if (withdraw_volume > 0) {  // 平仓撤单：减少平仓冻结，增加持仓
                 int64_t td = pos->td_closing_volume() >= withdraw_volume ? withdraw_volume : pos->td_closing_volume();
                 int64_t yd = td < withdraw_volume ? withdraw_volume - td : 0;
                 if (td > 0) {
@@ -279,10 +280,10 @@ namespace co {
         // 卖开（bs_flag=买，oc_flag=自动）：
         // 1.如果有买方向头寸，则执行：卖平;
         // 2.如果没有买方向头寸或买方向头寸不足，则执行：卖开
-        if (order.oc_flag != co::kOcFlagAuto) { // 不是自动开平仓，直接返回请求中设定的开平仓标记
+        if (order.oc_flag != co::kOcFlagAuto) {  // 不是自动开平仓，直接返回请求中设定的开平仓标记
             return order.oc_flag;
         }
-        int64_t ret_oc_flag = kOcFlagOpen; // 默认开仓
+        int64_t ret_oc_flag = kOcFlagOpen;  // 默认开仓
         string code = order.code;
         int64_t order_volume = order.volume;
         if (bs_flag != kBsFlagBuy && bs_flag != kBsFlagSell) {
@@ -290,21 +291,21 @@ namespace co {
         }
         int64_t r_bs_flag = bs_flag == kBsFlagBuy ? kBsFlagSell : kBsFlagBuy;
         auto itr_acc = positions_.find(fund_id);
-        if (itr_acc == positions_.end()) { // 没有初始化该资金账号的持仓，直接返回开仓
+        if (itr_acc == positions_.end()) {  // 没有初始化该资金账号的持仓，直接返回开仓
             return ret_oc_flag;
         }
         auto positions = itr_acc->second;
         std::string key = GetKey(code, r_bs_flag);
         auto itr = positions->find(key);
-        if (itr == positions->end()) { // 没有持仓，直接返回开仓
+        if (itr == positions->end()) {  // 没有持仓，直接返回开仓
             return ret_oc_flag;
         }
         auto pos = itr->second;
         // 上期所，平仓时需要指定是平今仓还是昨仓；
         // 其他交易所，平仓时不指定是平今仓还是昨仓，交易所自动以“先开先平”的原则进行处理。
-        if (pos->yd_volume() >= order_volume) { // 先平昨仓
+        if (pos->yd_volume() >= order_volume) {  // 先平昨仓
             ret_oc_flag = kOcFlagClose;
-        } else if (pos->td_volume() >= order_volume) { // 后平今仓
+        } else if (pos->td_volume() >= order_volume) {  // 后平今仓
             ret_oc_flag = kOcFlagClose;
         }
         return ret_oc_flag;

@@ -1,3 +1,4 @@
+// Copyright 2021 Fancapital Inc.  All rights reserved.
 #pragma once
 
 #include <iostream>
@@ -5,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 #include <unordered_map>
 #include <memory>
 
@@ -33,8 +35,8 @@ class InnerStockMaster {
     InnerStockPositionPtr GetOrCreatePosition(std::string fund_id, std::string code);
 
  private:
-    std::map<std::string, std::shared_ptr<std::map<std::string, InnerStockPositionPtr>>> positions_; // <fund_id> -> <code> -> obj
-    std::unordered_map<std::string, bool> knocks_; // <fund_id>_<inner_match_no> -> true
+    std::map<std::string, std::shared_ptr<std::map<std::string, InnerStockPositionPtr>>> positions_;  // <fund_id> -> <code> -> obj
+    std::unordered_map<std::string, bool> knocks_;  // <fund_id>_<inner_match_no> -> true
     std::set<std::string> t0_list_;
 };
 }  // namespace co

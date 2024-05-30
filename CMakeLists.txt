@@ -79,6 +79,8 @@ SET(ROOT_DIR "/home/work/sys/lib")
 FILE(GLOB COMMON_LIB_NAME "${ROOT_DIR}/common_lib/lib/*so*")
 FILE(COPY ${COMMON_LIB_NAME} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
+add_custom_target(cpplint COMMAND cpplint --recursive ${CMAKE_CURRENT_SOURCE_DIR}/src/mem_broker/*.*)
+
 
 
 
