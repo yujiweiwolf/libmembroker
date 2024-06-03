@@ -1,8 +1,12 @@
+// Copyright 2021 Fancapital Inc.  All rights reserved.
+#include <string>
+#include <vector>
+#include <utility>
 #include "config.h"
 #include "yaml-cpp/yaml.h"
 namespace co {
 
-    Config* Config::instance_ = 0;
+    Config* Config::instance_ = nullptr;
 
     Config* Config::Instance() {
         if (instance_ == 0) {
@@ -59,7 +63,7 @@ namespace co {
                 std::vector<std::string> suffixes;
                 getStrings(&suffixes, item, "markets");
                 std::vector<int64_t> markets;
-                for (auto& suffix: suffixes) {
+                for (auto& suffix : suffixes) {
                     try {
                         int64_t market = 1;
                         markets.emplace_back(market);
@@ -80,7 +84,7 @@ namespace co {
         ss << endl;
         ss << "fake:" << std::endl
            << "  accounts:" << std::endl;
-        for (auto& itr: accounts_) {
+        for (auto& itr : accounts_) {
             auto& acc = itr.second;
             ss << "    - {fund_id: \"" << acc->fund_id << "\", trade_type: \"";
             if (acc->type == kTradeTypeSpot) {
@@ -97,4 +101,4 @@ namespace co {
         ss << "+-------------------- configuration end   --------------------+";
         LOG_INFO << endl << ss.str();
     }
-}
+}  // namespace co

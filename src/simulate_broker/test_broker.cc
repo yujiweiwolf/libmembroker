@@ -1,8 +1,4 @@
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <ctime>
-
+// Copyright 2021 Fancapital Inc.  All rights reserved.
 #include "test_broker.h"
 #include "config.h"
 
@@ -30,7 +26,7 @@ namespace co {
         void* buffer = new char[length];
         memcpy(buffer, req, length);
         std::unique_lock<std::mutex> lock(mutex_);
-        all_req_.emplace(std::pair(req->id, std::pair(kMemTypeQueryTradeAssetReq ,buffer)));
+        all_req_.emplace(std::pair(req->id,  std::pair(kMemTypeQueryTradeAssetReq,  buffer)));
     }
 
     void TestBroker::OnQueryTradePosition(MemGetTradePositionMessage* req) {
@@ -41,7 +37,7 @@ namespace co {
         void* buffer = new char[length];
         memcpy(buffer, req, length);
         std::unique_lock<std::mutex> lock(mutex_);
-        all_req_.emplace(std::pair(req->id, std::pair(kMemTypeQueryTradePositionReq ,buffer)));
+        all_req_.emplace(std::pair(req->id,  std::pair(kMemTypeQueryTradePositionReq, buffer)));
     }
 
     void TestBroker::OnQueryTradeKnock(MemGetTradeKnockMessage* req) {
@@ -53,7 +49,7 @@ namespace co {
         void* buffer = new char[length];
         memcpy(buffer, req, length);
         std::unique_lock<std::mutex> lock(mutex_);
-        all_req_.emplace(std::pair(req->id, std::pair(kMemTypeQueryTradeKnockReq ,buffer)));
+        all_req_.emplace(std::pair(req->id,  std::pair(kMemTypeQueryTradeKnockReq, buffer)));
     }
 
     void TestBroker::OnTradeOrder(MemTradeOrderMessage* req) {
@@ -290,4 +286,3 @@ namespace co {
         }
     }
 }  // namespace co
-
