@@ -59,6 +59,7 @@ namespace co {
         if (strlen(account.fund_id) == 0) {
             LOG_ERROR << ("illegal fund_id: " +  string(account.fund_id));
         }
+        LOG_INFO << "Add account: " << account.fund_id << ", type: " << account.type;
         accounts_[account.fund_id] = account;
     }
 

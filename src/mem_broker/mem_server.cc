@@ -90,13 +90,6 @@ namespace co {
                         }
                     }
                 }
-            } else if (type == kMemTypeQueryTradeKnockRep) {
-                MemGetTradeKnockMessage* rep = (MemGetTradeKnockMessage*) data;
-                auto item = (MemTradeKnock*)((char*)rep + sizeof(MemGetTradeKnockMessage));
-                for (int i = 0; i < rep->items_size; i++) {
-                    MemTradeKnock *knock = item + i;
-                    IsNewMemTradeKnock(knock);
-                }
             } else if (type == 0) {
                 break;
             }
@@ -452,6 +445,7 @@ namespace co {
     }
 
     bool MemBrokerServer::MemBrokerServer::IsNewMemTradeKnock(MemTradeKnock* knock) {
+        CreateInnerMatchNo(knock);
         bool flag = false;
         string key = string(knock->inner_match_no);
         auto it = knocks_.find(key);
@@ -464,8 +458,8 @@ namespace co {
 
     void MemBrokerServer::SendQueryTradeAssetRep(MemGetTradeAssetMessage* rep) {
         int64_t ms = x::SubRawDateTime(x::RawDateTime(), rep->timestamp);
-        std::string error;
         std::string fund_id = rep->fund_id;
+        std::string error = rep->error;
         QueryContext* ctx = nullptr;
         auto itr_cursor = asset_contexts_.find(fund_id);
         if (itr_cursor != asset_contexts_.end()) {
@@ -480,9 +474,7 @@ namespace co {
         }
         wait_size_--;
         if (!error.empty()) {
-            x::Error([=]() {
-                LOG_ERROR << "[REP]query asset failed in " << ms << "ms: " << error;
-            });
+            LOG_ERROR << "[REP]query asset failed in " << ms << "ms: " << error;
             return;
         }
         auto first = (MemTradeAsset*)((char*)rep + sizeof(MemGetTradeAssetMessage));
@@ -528,8 +520,8 @@ namespace co {
 
     void MemBrokerServer::SendQueryTradePositionRep(MemGetTradePositionMessage* rep) {
         int64_t ms = x::SubRawDateTime(x::RawDateTime(), rep->timestamp);
-        std::string error;
         std::string fund_id = rep->fund_id;
+        std::string error = rep->error;
         QueryContext* ctx = nullptr;
         auto itr_cursor = position_contexts_.find(fund_id);
         if (itr_cursor != position_contexts_.end()) {
@@ -552,14 +544,15 @@ namespace co {
         }
         wait_size_--;
         if (!error.empty()) {
-            x::Error([=]() {
-                LOG_ERROR << "[REP]query position failed in " << ms << "ms: " << error;
-            });
+            LOG_ERROR << "[REP]query position failed in " << ms << "ms: " << error;
             return;
         }
         auto item = (MemTradePosition*)((char*)rep + sizeof(MemGetTradePositionMessage));
         for (int i = 0; i < rep->items_size; i++) {
             MemTradePosition *position = item + i;
+            if (position->timestamp == 0) {
+                position->timestamp = rep->timestamp;
+            }
             bool flag = false;
             string fund_id = position->fund_id;
             string code = position->code;
@@ -593,7 +586,7 @@ namespace co {
             pos_code_.insert(code);
             if (flag) {
                 LOG_INFO << "[DATA][POSITION] update position: fund_id: " << fund_id
-                         << ", timestamp: " << rep->timestamp
+                         << ", timestamp: " << position->timestamp
                          << ", code: " << position->code
                          << ", long_volume: " << position->long_volume
                          << ", long_market_value: " << position->long_market_value
@@ -654,9 +647,7 @@ namespace co {
         }
         wait_size_--;
         if (!error.empty()) {
-            x::Error([=]() {
-                LOG_ERROR << "[REP]query knock failed in " << ms << "ms: " << error;
-            });
+            LOG_ERROR << "[REP]query knock failed in " << ms << "ms: " << error;
             return;
         }
         for (int i = 0; i < rep->items_size; i++) {
@@ -665,7 +656,6 @@ namespace co {
                 void* buffer = rep_writer_.OpenFrame(sizeof(MemTradeKnock));
                 memcpy(buffer, knock, sizeof(MemTradeKnock));
                 MemTradeKnock* knock = (MemTradeKnock*)buffer;
-                CreateInnerMatchNo(knock);
                 rep_writer_.CloseFrame(kMemTypeTradeKnock);
                 LOG_INFO << "[DATA][KNOCK] update knock, fund_id: " << knock->fund_id
                          << ", code: " << knock->code
@@ -722,10 +712,13 @@ namespace co {
         int length = sizeof(MemTradeWithdrawMessage);
         void* buffer = rep_writer_.OpenFrame(length);
         memcpy(buffer, rep, length);
-        rep_writer_.CloseFrame(kMemTypeTradeOrderRep);
+        rep_writer_.CloseFrame(kMemTypeTradeWithdrawRep);
     }
 
     void MemBrokerServer::CreateInnerMatchNo(MemTradeKnock* knock) {
+         if (strlen(knock->inner_match_no) != 0) {
+             return;
+         }
         MemTradeAccount* account = broker_->GetAccount(knock->fund_id);
         if (account) {
             if (account->type == co::kTradeTypeSpot) {
@@ -743,33 +736,15 @@ namespace co {
                     knock->inner_match_no[index++] = knock->code[i];
                 }
             } else {
-                size_t index = 0;
-                size_t i = 0;
-                knock->inner_match_no[index++] = '_';
-                for (i = 0; i < strlen(knock->match_no); ++i) {
-                    knock->inner_match_no[index++] = knock->match_no[i];
-                }
+                strcpy(knock->inner_match_no, knock->match_no);
             }
         } else {
-            size_t index = 0;
-            size_t i = 0;
-            for (i = 0; i < strlen(knock->order_no); ++i) {
-                knock->inner_match_no[index++] = knock->order_no[i];
-            }
-            knock->inner_match_no[index++] = '_';
-            for (i = 0; i < strlen(knock->match_no); ++i) {
-                knock->inner_match_no[index++] = knock->match_no[i];
-            }
-            knock->inner_match_no[index++] = '_';
-            for (i = 0; i < strlen(knock->code); ++i) {
-                knock->inner_match_no[index++] = knock->code[i];
-            }
+            strcpy(knock->inner_match_no, knock->match_no);
         }
     }
 
     void  MemBrokerServer::SendTradeKnock(MemTradeKnock* knock) {
         if (IsNewMemTradeKnock(knock)) {
-            CreateInnerMatchNo(knock);
             int length = sizeof(MemTradeKnock);
             void* buffer = rep_writer_.OpenFrame(length);
             memcpy(buffer, knock, length);
