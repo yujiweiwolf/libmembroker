@@ -86,7 +86,7 @@ namespace co {
             string order_no = "order_no_" + std::to_string(order_no_index_++);
             strcpy(order->order_no, order_no.c_str());
         }
-        rep->rep_time = x::RawDateTime();
+        // rep->rep_time = x::RawDateTime();
         SendRtnMessage(string(buffer, length), kMemTypeTradeOrderRep);
         {
             for (int i = 0; i < rep->items_size; i++) {
@@ -140,17 +140,17 @@ namespace co {
         std::unique_lock<std::mutex> lock(mutex_);
         all_req_.emplace(std::pair(req->id, std::pair(kMemTypeTradeWithdrawReq ,buffer)));
 #endif
+        int64_t rep_time = x::RawDateTime();
         LOG_INFO << "回写撤单回报";
         int length = sizeof(MemTradeWithdrawMessage);
         char buffer[length] = "";
         memcpy(buffer, req, length);
         MemTradeWithdrawMessage* rep = (MemTradeWithdrawMessage*)buffer;
-        if (rep->rep_time % 2 == 0) {
+        if (rep_time % 2 == 0) {
             strcpy(rep->error, "撤单错误，报单已成交");
         }
-        rep->rep_time = x::RawDateTime();
         SendRtnMessage(string(buffer, length), kMemTypeTradeWithdrawRep);
-        if (rep->rep_time % 2 != 0) {
+        if (rep_time % 2 != 0) {
             int length = sizeof(MemTradeKnock);
             char buffer[length] = "";
             MemTradeKnock* knock = (MemTradeKnock*) buffer;

@@ -191,7 +191,7 @@ namespace co {
             MemTradeOrderMessage* rep = (MemTradeOrderMessage*)buffer;
             memcpy(rep, req, length);
             strncpy(rep->error, error.c_str(), kMemErrorSize - 1);
-            rep->rep_time = x::RawDateTime();
+            // rep->rep_time = x::RawDateTime();
             rep_writer_->CloseFrame(kMemTypeTradeOrderRep);
         }
         server_->EndTask();
@@ -214,7 +214,7 @@ namespace co {
             MemTradeWithdrawMessage* rep = (MemTradeWithdrawMessage*)buffer;
             memcpy(rep, req, length);
             strncpy(rep->error, error.c_str(), kMemErrorSize - 1);
-            rep->rep_time = x::RawDateTime();
+            // rep->rep_time = x::RawDateTime();
             rep_writer_->CloseFrame(kMemTypeTradeWithdrawRep);
         }
         server_->EndTask();
