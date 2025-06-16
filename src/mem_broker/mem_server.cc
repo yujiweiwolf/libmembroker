@@ -10,9 +10,10 @@
 #include "mem_server.h"
 
 namespace co {
-     MemBrokerServer::MemBrokerServer() {
-         start_time_ = x::RawDateTime();
-         queue_ = std::make_shared<StringQueue>();
+    MemBrokerServer::MemBrokerServer() {
+        start_time_ = x::RawDateTime();
+        queue_ = std::make_shared<BrokerQueue>();
+        flow_control_queue_ = std::make_shared<FlowControlQueue>(queue_.get());
     }
 
     MemBrokerServer::~MemBrokerServer() {
@@ -20,8 +21,11 @@ namespace co {
 
     void MemBrokerServer::Init(MemBrokerOptionsPtr option, MemBrokerPtr broker) {
         opt_ = option;
-        node_name_ = option->node_name();
         broker_ = broker;
+        enable_flow_control_ = opt_->IsFlowControlEnabled();
+        if (enable_flow_control_) {
+            flow_control_queue_->Init(opt_);
+        }
     }
 
     void  MemBrokerServer::Start() {
@@ -47,10 +51,22 @@ namespace co {
         broker_->Init(*opt_, this, &rep_writer_);
         LoadTradingData();
 
+        auto accounts = broker_->GetAccounts();
+        string fc_spot_fund_id;
+        for (auto itr = accounts.begin(); itr != accounts.end(); ++itr) {
+            auto& acc = itr->second;
+            if (enable_flow_control_ && acc.type == kTradeTypeSpot) {
+                fc_spot_fund_id = acc.fund_id;
+            }
+        }
+        if (enable_flow_control_) {
+            flow_control_queue_->InitState(fc_spot_fund_id);
+        }
+
         threads_.emplace_back(std::make_shared<std::thread>(std::bind(& MemBrokerServer::RunQuery, this)));
         threads_.emplace_back(std::make_shared<std::thread>(std::bind(& MemBrokerServer::RunWatch, this)));
         threads_.emplace_back(std::make_shared<std::thread>(std::bind(& MemBrokerServer::ReadReqMem, this)));
-        HandleQueueMessaage();
+        HandleQueueMessage();
     }
 
     void MemBrokerServer::LoadTradingData() {
@@ -106,8 +122,8 @@ namespace co {
                  << ", knock: " << knocks_.size();
      }
 
-    bool MemBrokerServer::ExitAccout(const string& fund_id) {
-         return broker_->ExitAccout(fund_id);
+    bool MemBrokerServer::ExitAccount(const string& fund_id) {
+         return broker_->ExitAccount(fund_id);
      }
 
     void MemBrokerServer::BeginTask() {
@@ -141,7 +157,7 @@ namespace co {
                 req->timestamp = x::RawDateTime();
                 strncpy(req->id, id.c_str(), id.length());
                 strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
-                queue_->Push(kMemTypeQueryTradePositionReq,
+                queue_->Push(nullptr, kMemTypeQueryTradePositionReq,
                              string(static_cast<const char*>(buffer), sizeof(MemGetTradePositionMessage)));
             }
         }
@@ -156,7 +172,7 @@ namespace co {
                 req->timestamp = x::RawDateTime();
                 strncpy(req->id, id.c_str(), id.length());
                 strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
-                queue_->Push(kMemTypeQueryTradePositionReq,
+                queue_->Push(nullptr, kMemTypeQueryTradePositionReq,
                              string(static_cast<const char*>(buffer), sizeof(MemGetTradePositionMessage)));
             }
         }
@@ -181,6 +197,7 @@ namespace co {
         if (!exit_flag) {
             x::MMapWriter req_writer;
             req_writer.Open(mem_dir, mem_req_file, kReqMemSize << 20, true);
+            req_writer.Close();
         }
         x::MMapReader consume_reader;  // 抢占式读网关的报撤单数据
         consume_reader.SetEnableConsume(true);
@@ -189,15 +206,15 @@ namespace co {
         const void* data = nullptr;
         auto get_req = [&](int32_t type, const void* data)-> bool {
             if (type == kMemTypeTradeOrderReq) {
-                MemTradeOrderMessage *msg = (MemTradeOrderMessage *)data;
-                if (ExitAccout(msg->fund_id)) {
+                MemTradeOrderMessage *msg = (MemTradeOrderMessage*)data;
+                if (ExitAccount(msg->fund_id)) {
                     return true;
                 } else {
                     return false;
                 }
             } else if (type == kMemTypeTradeWithdrawReq) {
                 MemTradeWithdrawMessage *msg = (MemTradeWithdrawMessage *)data;
-                if (ExitAccout(msg->fund_id)) {
+                if (ExitAccount(msg->fund_id)) {
                     return true;
                 } else {
                     return false;
@@ -207,29 +224,40 @@ namespace co {
         };
         while (true) {
             // 抢占式读网关的报撤单数据
-            int32_t type = consume_reader.ConsumeWhere(&data, get_req, true);
-            if (type == kMemTypeTradeOrderReq) {
-                MemTradeOrderMessage *req = (MemTradeOrderMessage *) data;
-                int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * req->items_size;
-                queue_->Push(kMemTypeTradeOrderReq, string(reinterpret_cast<const char *>(data), length));
-            } else if (type == kMemTypeTradeWithdrawReq) {
-                queue_->Push(kMemTypeTradeWithdrawReq,
-                             string(reinterpret_cast<const char *>(data), sizeof(MemTradeWithdrawMessage)));
+            while (true) {
+                int32_t type = consume_reader.ConsumeWhere(&data, get_req, true);
+                if (type == kMemTypeTradeOrderReq) {
+                    MemTradeOrderMessage *req = (MemTradeOrderMessage *) data;
+                    int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * req->items_size;
+                    queue_->Push(nullptr, kMemTypeTradeOrderReq, string(reinterpret_cast<const char *>(data), length));
+                } else if (type == kMemTypeTradeWithdrawReq) {
+                    queue_->Push(nullptr, kMemTypeTradeWithdrawReq,
+                                 string(reinterpret_cast<const char *>(data), sizeof(MemTradeWithdrawMessage)));
+                } else {
+                    break;
+                }
             }
+            // 读rep内存，所有帐号的报单响应和成交信息，用于计算防对敲
         }
      }
 
-    void MemBrokerServer::HandleQueueMessaage() {
+    void MemBrokerServer::HandleQueueMessage() {
         try {
             int cpu_affinity = opt_->cpu_affinity();
             if (cpu_affinity > 0) {
                 x::SetCPUAffinity(cpu_affinity);
             }
             while (true) {
-                std::string raw;
-                int64_t type = queue_->Pop(&raw);
-                if (type > 0 && raw.length() > 0) {
-                    switch (type) {
+                BrokerMsg* msg = enable_flow_control_ ? flow_control_queue_->Pop() : queue_->Pop();
+                int64_t queue_size = enable_flow_control_ ? flow_control_queue_->GetNormalQueueSize() : queue_->Size();
+                int64_t fc_size = 0;
+                int64_t fc_total_size = 0;
+                flow_control_queue_->GetFlowControlQueueSize(&fc_size, &fc_total_size);
+                int64_t function_id = msg->function_id();
+                std::string raw = msg->data();
+                BrokerMsg::Destory(msg);
+                if (function_id > 0 && raw.length() > 0) {
+                    switch (function_id) {
                         case kMemTypeTradeOrderReq: {
                             MemTradeOrderMessage *msg = reinterpret_cast<MemTradeOrderMessage*>(raw.data());
                             SendTradeOrder(msg);
@@ -290,7 +318,7 @@ namespace co {
                             break;
                         }
                         default:
-                            LOG_ERROR << "handle message failed: unknown function_id: " << type;
+                            LOG_ERROR << "handle message failed: unknown function_id: " << function_id;
                             break;
                     }
                 }
@@ -355,7 +383,7 @@ namespace co {
                     req->timestamp = x::RawDateTime();
                     strncpy(req->id, id.c_str(), id.length());
                     strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
-                    queue_->Push(kMemTypeQueryTradeAssetReq,
+                    queue_->Push(nullptr, kMemTypeQueryTradeAssetReq,
                                  string(static_cast<const char*>(buffer), sizeof(MemTradeWithdrawMessage)));
                 }
             }
@@ -374,7 +402,7 @@ namespace co {
                     req->timestamp = x::RawDateTime();
                     strncpy(req->id, id.c_str(), id.length());
                     strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
-                    queue_->Push(kMemTypeQueryTradePositionReq,
+                    queue_->Push(nullptr, kMemTypeQueryTradePositionReq,
                                  string(static_cast<const char*>(buffer), sizeof(MemGetTradePositionMessage)));
                 }
             }
@@ -399,7 +427,7 @@ namespace co {
                     strncpy(req->id, id.c_str(), id.length());
                     strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
                     strncpy(req->cursor, next_cursor.c_str(), next_cursor.length());
-                    queue_->Push(kMemTypeQueryTradeKnockReq,
+                    queue_->Push(nullptr, kMemTypeQueryTradeKnockReq,
                                  string(static_cast<const char*>(buffer), sizeof(MemGetTradeKnockMessage)));
                 }
             }
@@ -677,6 +705,7 @@ namespace co {
         if (start_time_ > rep->timestamp) {
             return;
         }
+        broker_->SendTradeOrderRep(rep);
         if (auto it = pending_orders_.find(rep->id); it != pending_orders_.end()) {
             pending_orders_.erase(it);
         }
@@ -745,6 +774,7 @@ namespace co {
 
     void  MemBrokerServer::SendTradeKnock(MemTradeKnock* knock) {
         if (IsNewMemTradeKnock(knock)) {
+            broker_->SendTradeKnock(knock);
             int length = sizeof(MemTradeKnock);
             void* buffer = rep_writer_.OpenFrame(length);
             memcpy(buffer, knock, length);
@@ -764,14 +794,14 @@ namespace co {
     }
 
     void MemBrokerServer::SendRtnMessage(const std::string& raw, int64_t type) {
-        queue_->Push(type, raw);
+        queue_->Push(nullptr, type, raw);
      }
 
     void  MemBrokerServer::RunWatch() {
         int64_t watch_interval_ms = 1000;
         while (true) {
             x::Sleep(watch_interval_ms);
-            queue_->Push(kMemTypeInnerCyclicSignal, "");
+            queue_->Push(nullptr, kMemTypeInnerCyclicSignal, "");
         }
     }
 

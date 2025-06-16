@@ -21,7 +21,7 @@ class MemBroker {
 
     const std::map<string, MemTradeAccount>& GetAccounts() const;
     co::MemTradeAccount* GetAccount(const string& fund_id);
-    bool ExitAccout(const string& fund_id);
+    bool ExitAccount(const string& fund_id);
     void AddAccount(const co::MemTradeAccount& account);
 
     void SendQueryTradeAsset(MemGetTradeAssetMessage* req);
@@ -32,7 +32,9 @@ class MemBroker {
 
     void SendRtnMessage(const std::string& raw, int64_t type);
 
-    void SetInitPositions(MemGetTradePositionMessage* rep, int8_t dtype);
+    void SetInitPositions(MemGetTradePositionMessage* rep, int64_t type);
+
+    void SendTradeOrderRep(MemTradeOrderMessage* rep);
 
     // 自动开平，计算持仓
     void SendTradeKnock(MemTradeKnock* knock);

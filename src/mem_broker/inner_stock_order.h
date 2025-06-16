@@ -6,6 +6,7 @@
 #include <vector>
 #include <memory>
 #include <x/x.h>
+using std::string;
 
 namespace co {
 class InnerStockOrder {

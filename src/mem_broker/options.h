@@ -4,18 +4,64 @@
 #include <sstream>
 #include <string>
 #include <memory>
-
 #include "x/x.h"
+#include "utils.h"
 
+using std::string;
 namespace co {
+class FlowControlConfig {
+ public:
+    std::string ToString() const;
+    [[nodiscard]] inline int64_t market() const {
+        return market_;
+    }
+    inline void set_market(int64_t market) {
+        market_ = market;
+    }
+    [[nodiscard]] inline int64_t th_tps_limit() const {
+        return th_tps_limit_;
+    }
+    inline void set_th_tps_limit(int64_t th_tps_limit) {
+        th_tps_limit_ = th_tps_limit;
+    }
+    [[nodiscard]] inline int64_t th_daily_warning() const {
+        return th_daily_warning_;
+    }
+    inline void set_th_daily_warning(int64_t th_daily_warning) {
+        th_daily_warning_ = th_daily_warning;
+    }
+    [[nodiscard]] inline int64_t th_daily_limit() const {
+        return th_daily_limit_;
+    }
+    inline void set_th_daily_limit(int64_t th_daily_limit) {
+        th_daily_limit_ = th_daily_limit;
+    }
+
+private:
+    int64_t market_ = 0; // 市场代码
+    int64_t th_tps_limit_ = 0; // 每秒报撤单流控阈值
+    int64_t th_daily_warning_ = 0; // 全天报撤单预警阈值
+    int64_t th_daily_limit_ = 0; // 全天报撤单流控阈值
+};
+
 class MemBrokerOptions {
  public:
     static std::shared_ptr<MemBrokerOptions> Load(const std::string& filename = "");
 
     std::string ToString();
 
-    inline std::string trade_gateway() const {
-        return trade_gateway_;
+    bool IsFlowControlEnabled() const;
+
+    inline bool disable_flow_control() const {
+        return disable_flow_control_;
+    }
+
+    inline const std::vector<std::unique_ptr<FlowControlConfig>>& flow_controls() const {
+        return flow_controls_;
+    }
+
+    inline std::vector<std::unique_ptr<FlowControlConfig>>* mutable_flow_controls() {
+        return &flow_controls_;
     }
 
     inline int64_t request_timeout_ms() const {
@@ -79,6 +125,8 @@ class MemBrokerOptions {
     bool enable_upload_ = true;  // 是否启用上传交易数据
 
     int64_t request_timeout_ms_ = 5000;  // 请求超时时间
+    bool disable_flow_control_ = false;  // 强制明确禁用流控
+    std::vector<std::unique_ptr<FlowControlConfig>> flow_controls_;
 
     bool enable_stock_short_selling_ = false;  // 启用股票账户融券模式
     bool enable_query_only_ = false;  // 是否启用只查询模式，不接收报单和撤单等指令

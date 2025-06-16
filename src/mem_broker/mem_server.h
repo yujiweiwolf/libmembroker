@@ -11,6 +11,7 @@
 #include "coral/coral.h"
 #include "options.h"
 #include "mem_base_broker.h"
+#include "flow_control.h"
 
 namespace co {
 class QueryContext {
@@ -90,7 +91,7 @@ class MemBrokerServer {
 
     void Run();
 
-    bool ExitAccout(const string& fund_id);
+    bool ExitAccount(const string& fund_id);
     void BeginTask();
     void EndTask();
 
@@ -103,7 +104,7 @@ class MemBrokerServer {
     void RunWatch();
     void DoWatch();
     void ReadReqMem();
-    void HandleQueueMessaage();
+    void HandleQueueMessage();
 
     void LoadTradingData();
     bool IsNewMemTradeKnock(MemTradeKnock* knock);
@@ -146,7 +147,9 @@ class MemBrokerServer {
 
     std::unordered_map<std::string, int64_t> pending_orders_;
     std::unordered_map<std::string, int64_t> pending_withdraws_;
-    shared_ptr<StringQueue> queue_;
+    shared_ptr<BrokerQueue> queue_;
+    bool enable_flow_control_ = false;
+    shared_ptr<FlowControlQueue> flow_control_queue_;
 };
 }  // namespace co
 

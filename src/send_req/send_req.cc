@@ -22,7 +22,7 @@ const char mem_rep_file[] = "broker_rep";
 
 void write_order(x::MMapWriter* writer) {
     for (int index = 0; index < NUM_ORDER; index++) {
-        int total_order_num = 1;
+        int total_order_num = 3;
         string id = x::UUID();
         void* buffer = writer->OpenFrame(sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * total_order_num);
         MemTradeOrderMessage* msg = (MemTradeOrderMessage*) buffer;
@@ -38,6 +38,15 @@ void write_order(x::MMapWriter* writer) {
             order->price_type = kQOrderTypeLimit;
             sprintf(order->code, "00000%d.SZ", index + 1);
             LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
+        }
+        //  解析委托列表柔性数组
+        {
+            MemTradeOrderMessage* msg = (MemTradeOrderMessage*) buffer;
+            MemTradeOrder* items = msg->items;
+            for (int i = 0; i < msg->items_size; i++) {
+                MemTradeOrder* order = items + i;
+                LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
+            }
         }
         msg->timestamp = x::RawDateTime();
         writer->CloseFrame(kMemTypeTradeOrderReq);

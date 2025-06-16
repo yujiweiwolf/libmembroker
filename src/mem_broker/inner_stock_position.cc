@@ -8,7 +8,7 @@ namespace co {
     }
 
     std::string InnerStockPosition::ToString() {
-        stringstream ss;
+        std::stringstream ss;
         ss << "InnerPosition{";
         ss << "code: " << code_
             << ", total_borrowed_volume: " << total_borrowed_volume_

@@ -1,12 +1,13 @@
 broker:
-  trade_gateway: tcp://xmac:9801?cluster_token=e10adc3949ba59abbe56e057f20f883e
-  wal: wal:///../data/trade.broker.wal?keep=5
-  enable_upload: true
+  enable_query_only: false
   query_asset_interval_ms: 0
   query_position_interval_ms: 0
   query_knock_interval_ms: 0
   request_timeout_ms: 5000
-  enable_query_only: false
+  disable_flow_control: true
+  flow_control:
+    - { market: ".SH", th_tps_limit: 550, th_daily_warning: 17000, th_daily_limit: 18000 }
+    - { market: ".SZ", th_tps_limit: 550, th_daily_warning: 17000, th_daily_limit: 18000 }
   enable_stock_short_selling: false
   idle_sleep_ns: 1000000
   cpu_affinity: 0
@@ -25,6 +26,10 @@ fake1:
     - {fund_id: "S1", trade_type: "spot", markets: [".SZ"]}
     - {fund_id: "F1", trade_type: "future", markets: [".CFFEX", ".DCE"]}
     - {fund_id: "O1", trade_type: "option", markets: [".SH", ".SZ"]}
+
+riseker:
+  - {fund_id: "S1", risker_id: "fancapital", disabled: false, enable_prevent_self_knock: true, only_etf_anti_self_knock: false}
+  - {fund_id: "S2", risker_id: "zhongxin", disabled: false, enable_prevent_self_knock: true, only_etf_anti_self_knock: false}
 
 log:
   level: trace
