@@ -4,13 +4,17 @@
 namespace co {
     void Risker::Init(std::shared_ptr<RiskOptions> opt) {}
 
-    std::string Risker::HandleTradeOrderReq(MemTradeOrderMessage* req) {}
+    std::string Risker::HandleTradeOrderReq(MemTradeOrderMessage* req) {
+        return "";
+    }
 
     void Risker::OnTradeOrderReqPass(MemTradeOrderMessage* req) {}
 
     void Risker::HandleTradeOrderRep(MemTradeOrderMessage* rep) {}
 
-    std::string Risker::HandleTradeWithdrawReq(MemTradeWithdrawMessage* req) {}
+    std::string Risker::HandleTradeWithdrawReq(MemTradeWithdrawMessage* req) {
+        return "";
+    }
 
     void Risker::OnTradeWithdrawReqPass(MemTradeWithdrawMessage* req) {}
 

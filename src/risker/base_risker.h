@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include "./risk_options.h"
+#include "risk_options.h"
 #include "coral/coral.h"
 
 #ifdef _WIN32

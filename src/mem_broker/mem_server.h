@@ -12,6 +12,7 @@
 #include "options.h"
 #include "mem_base_broker.h"
 #include "flow_control.h"
+#include "../risker/risk_master.h"
 
 namespace co {
 class QueryContext {
@@ -83,7 +84,7 @@ class MemBrokerServer {
 
     ~MemBrokerServer();
 
-    void Init(MemBrokerOptionsPtr option, MemBrokerPtr broker);
+    void Init(MemBrokerOptionsPtr option, const std::vector<std::shared_ptr<RiskOptions>>& risk_opts, MemBrokerPtr broker);
 
     void Start();
 
@@ -126,6 +127,7 @@ class MemBrokerServer {
  private:
     MemBrokerOptionsPtr opt_;
     MemBrokerPtr broker_;
+    RiskMasterPtr risker_;
     std::string node_name_;
     std::vector<std::shared_ptr<std::thread>> threads_;
 

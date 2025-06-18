@@ -40,6 +40,14 @@ namespace co {
                 throw std::runtime_error(e.what());
             }
         };
+        auto getBool = [&](const YAML::Node& node, const std::string& name) {
+            try {
+                return node[name] && !node[name].IsNull() ? node[name].as<bool>() : false;
+            } catch (std::exception& e) {
+                LOG_ERROR << "load configuration failed: name = " << name << ", error = " << e.what();
+                throw std::runtime_error(e.what());
+            }
+        };
         auto filename = x::FindFile("broker.yaml");
         YAML::Node root = YAML::LoadFile(filename);
         options_ = MemBrokerOptions::Load(filename);
@@ -78,6 +86,25 @@ namespace co {
                 accounts_[fund_id] = std::move(account);
             }
         }
+        auto risk = root["risk"];
+        if (risk["accounts"] && !risk["accounts"].IsNull()) {
+            for (auto item : risk["accounts"]) {
+                std::shared_ptr<RiskOptions> opt = std::make_shared<RiskOptions>();
+                std::string fund_id = getStr(item, "fund_id");
+                std::string risker_id = getStr(item, "risker_id");
+                bool disabled = getBool(item, "disabled");
+                bool enable_prevent_self_knock = getBool(item, "enable_prevent_self_knock");
+                bool only_etf_anti_self_knock = getBool(item, "only_etf_anti_self_knock");
+                opt->set_risker_id(risker_id);
+                opt->set_fund_id(fund_id);
+                opt->set_disabled(disabled);
+                std::string data = "{\"enable_prevent_self_knock\":" + string(enable_prevent_self_knock ? "true" : "false") +
+                        "," + "\"only_etf_anti_self_knock\":" + string(only_etf_anti_self_knock ? "true" : "false") +
+                        + "}";
+                opt->set_data(data);
+                risk_opts_.push_back(opt);
+            }
+        }
         stringstream ss;
         ss << "+-------------------- configuration begin --------------------+" << endl;
         ss << options_->ToString() << endl;
@@ -96,6 +123,15 @@ namespace co {
             } else {
                 ss << acc->type << "-unknown";
             }
+            ss << std::endl;
+        }
+        ss << "risk:" << std::endl
+           << "  accounts:" << std::endl;
+        for (auto& risk : risk_opts_) {
+            ss << "    - {fund_id: \"" << risk->fund_id() << "\", risker_id: \"" << risk->risker_id();
+            ss << "\", disabled: \"" << std::boolalpha << risk->disabled();
+            ss << "\", enable_prevent_self_knock: \"" << std::boolalpha << risk->GetBool("enable_prevent_self_knock");
+            ss << "\", only_etf_anti_self_knock: \"" << std::boolalpha << risk->GetBool("only_etf_anti_self_knock");
             ss << std::endl;
         }
         ss << "+-------------------- configuration end   --------------------+";

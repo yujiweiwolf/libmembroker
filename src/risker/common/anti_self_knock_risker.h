@@ -1,13 +1,7 @@
 // Copyright 2021 Fancapital Inc.  All rights reserved.
 #pragma once
-#include <set>
-#include <memory>
-#include <vector>
-#include <string>
-#include <unordered_map>
 #include "../base_risker.h"
 #include "order_book.h"
-#include "define.h"
 
 namespace co {
 class OrderBook;
@@ -34,19 +28,9 @@ private:
     bool only_etf_ = false; // 是否只针对ETF进行防对敲
 };
 
-struct QTick {
-    int64_t timestamp;
-    double bp1;
-    double ap1;
-    double new_price;
-    int64_t sum_volume;
-};
-
-/**
- * 防对敲
- */
 class AntiSelfKnockRisker : public Risker {
  public:
+    AntiSelfKnockRisker();
     ~AntiSelfKnockRisker();
 
     void AddOption(std::shared_ptr<RiskOptions> opt);

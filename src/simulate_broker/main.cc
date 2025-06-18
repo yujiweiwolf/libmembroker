@@ -18,7 +18,7 @@ void order(shared_ptr<MemBroker> broker) {
         int total_order_num = 1;
         string id = x::UUID();
         int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * total_order_num;
-        char buffer[length] = "";
+        char buffer[length] = {};
         MemTradeOrderMessage* msg = (MemTradeOrderMessage*) buffer;
         strncpy(msg->id, id.c_str(), id.length());
         strcpy(msg->fund_id, fund_id);
@@ -152,9 +152,10 @@ void ReadRep() {
 int main(int argc, char* argv[]) {
     try {
         MemBrokerOptionsPtr options = Config::Instance()->options();
+        const std::vector<std::shared_ptr<RiskOptions>>& risk_opts = Config::Instance()->risk_opt();
         MemBrokerServer server;
         shared_ptr<TestBroker> broker = make_shared<TestBroker>();
-        server.Init(options, broker);
+        server.Init(options, risk_opts, broker);
         server.Start();
 
         mem_dir = options->mem_dir();

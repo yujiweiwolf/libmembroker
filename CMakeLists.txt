@@ -18,13 +18,12 @@ link_directories(${CORAL_LIBRARY_DIRS})
 message("*****************************************")
 
 
-add_library(librisker
+add_library(risker
         src/risker/base_risker.cc
         src/risker/fancapital/fancapital_risker.cc
         src/risker/fancapital/fancapital_risker.h
         src/risker/risk_options.h
         src/risker/common/anti_self_knock_risker.cc
-        src/risker/common/define.h
         src/risker/common/order_book.cc
         src/risker/common/anti_self_knock_risker.h
         src/risker/common/order_book.h
@@ -37,12 +36,12 @@ add_library(librisker
 aux_source_directory (./src/mem_broker LIB_LIST)
 #message(${LIB_LIST})
 add_library (membroker ${LIB_LIST})
-add_dependencies(membroker librisker)
+add_dependencies(membroker risker)
 
 aux_source_directory (./src/simulate_broker MEM_TEST_LIST)
 add_executable(imitative_broker ${MEM_TEST_LIST})
 target_link_libraries(imitative_broker
-        membroker coral swordfish x stdc++fs yaml-cpp  clickhouse-cpp-lib-static boost_date_time boost_filesystem boost_regex boost_system  boost_chrono boost_log boost_program_options boost_thread boost_iostreams boost_context boost_coroutine z protobuf protobuf-lite sodium zmq ssl crypto iconv pthread dl)
+        membroker risker coral swordfish x stdc++fs yaml-cpp  clickhouse-cpp-lib-static boost_date_time boost_filesystem boost_regex boost_system  boost_chrono boost_log boost_program_options boost_thread boost_iostreams boost_context boost_coroutine z protobuf protobuf-lite sodium zmq ssl crypto iconv pthread dl)
 
 add_executable(send_req src/send_req/send_req.cc)
 target_link_libraries(send_req

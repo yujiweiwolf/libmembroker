@@ -3,8 +3,9 @@
 #include <map>
 #include <memory>
 #include <x/x.h>
-#include "../mem_broker//options.h"
+#include "../mem_broker/options.h"
 #include "../mem_broker/mem_struct.h"
+#include "../risker/risk_options.h"
 
 using namespace std;
 
@@ -21,6 +22,10 @@ class Config {
         return accounts_;
     }
 
+    const std::vector<std::shared_ptr<RiskOptions>>& risk_opt() const {
+        return risk_opts_;
+    }
+
  protected:
     Config() = default;
     ~Config() = default;
@@ -33,5 +38,6 @@ class Config {
     static Config* instance_;
     MemBrokerOptionsPtr options_;
     std::map<std::string, std::shared_ptr<MemTradeAccount>> accounts_;
+    std::vector<std::shared_ptr<RiskOptions>> risk_opts_;
 };
 }  // namespace co
