@@ -12,12 +12,12 @@
 
 namespace co {
 
-    constexpr int64_t kFlowControlPriorityWithdraw = 1;
+    constexpr int64_t kFlowControlPriorityWithdraw = 3;
     constexpr int64_t kFlowControlPriorityCreateRedeem = 2;
-    constexpr int64_t kFlowControlPriorityOthers = 3;
+    constexpr int64_t kFlowControlPriorityOthers = 1;
+    constexpr int64_t kItemMultiple = 100000000;
 
     constexpr int64_t kFlowControlWindowMS = 1500;  // 流控时间窗口，1秒+500ms安全垫；
-
 
     constexpr int64_t kMemTypeFlowControlState = 1390001;
 #ifdef _WIN32
@@ -51,7 +51,7 @@ namespace co {
 
     class FlowControlItem {
     public:
-        FlowControlItem(int64_t timestamp, int64_t priority, int64_t cmd_size, double order_amount, int64_t timeout, BrokerMsg* msg);
+        FlowControlItem(int64_t timestamp, int64_t priority, int64_t cmd_size, double order_amount, double total_amount, int64_t timeout, BrokerMsg* msg);
 
         [[nodiscard]] inline int64_t timestamp() const {
             return timestamp_;
@@ -69,6 +69,10 @@ namespace co {
             return order_amount_;
         }
 
+        [[nodiscard]] inline double total_amount() const {
+            return total_amount_;
+        }
+
         [[nodiscard]] inline int64_t timeout() const {
             return timeout_;
         }
@@ -79,9 +83,10 @@ namespace co {
 
     private:
         int64_t timestamp_ = 0;  // 消息时间
-        int64_t priority_ = 0;  // 类型，1-撤单，2-申赎，3-其他
+        int64_t priority_ = 0;  // 类型，3-撤单，2-申赎，1-其他
         int64_t cmd_size_ = 1;  // 流控个数，委托个数或撤单个数；
         double order_amount_ = 0;  // 其他类型的委托金额
+        double total_amount_ = 0;  // priority * 100000000 + order_amount_
         int64_t timeout_ = 0; // 超时毫秒数，取min(req.timeout, cfg.timeout)
         BrokerMsg* msg_ = nullptr;  // BrokerQueue中的元素
     };
@@ -99,7 +104,7 @@ namespace co {
 
         void Push(std::unique_ptr<FlowControlItem> item);
         void PopWarningMessage(const std::string& node_name, std::string* text);
-        static BrokerMsg* CreateErrorRep(flatbuffers::FlatBufferBuilder* fbb, BrokerMsg* msg, const std::string& error);
+        static BrokerMsg* CreateErrorRep(BrokerMsg* msg, const std::string& error);
 
         inline int64_t market() const {
             return market_;
@@ -163,7 +168,6 @@ namespace co {
         BrokerMsg* CreateTimeoutRep(int64_t now_dt, FlowControlItem* item, int64_t ahead_count);
 
     private:
-        flatbuffers::FlatBufferBuilder fbb_;
         int64_t market_ = 0; // 市场代码
         int64_t th_tps_limit_ = 0; // 每秒报撤单流控阈值
         int64_t th_daily_warning_ = 0; // 全天报撤单预警阈值
@@ -238,5 +242,4 @@ namespace co {
         std::string state_path_ = "../data/state.broker.mem";  // 状态持久化路径
         x::MMapWriter meta_writer_;
     };
-
 }

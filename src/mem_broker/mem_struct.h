@@ -24,11 +24,11 @@ struct MemTradeAccount {
     char name[128];
     int64_t type = 0;
     int64_t batch_order_size = 0;
-    bool disabled = false;
-    bool enable_trader = false;
-    bool enable_researcher = false;
-    bool enable_risker = false;
-    int64_t market;
+//    bool disabled = false;
+//    bool enable_trader = false;
+//    bool enable_researcher = false;
+//    bool enable_risker = false;
+//    int64_t market;
 };
 
 struct MemGetTradeAssetMessage {
@@ -37,6 +37,7 @@ struct MemGetTradeAssetMessage {
     char fund_id[kMemFundIdSize];
     int64_t items_size;
     char error[kMemErrorSize];
+    MemTradeAsset items[];
 };
 
 struct MemGetTradePositionMessage {
@@ -46,6 +47,7 @@ struct MemGetTradePositionMessage {
     char cursor[128];
     int64_t items_size;
     char error[kMemErrorSize];
+    MemTradePosition items[];
 };
 
 struct MemGetTradeKnockMessage {
@@ -56,6 +58,7 @@ struct MemGetTradeKnockMessage {
     char next_cursor[128];
     int64_t items_size;
     char error[kMemErrorSize];
+    MemTradeKnock items[];
 };
 
 struct HeartBeatMessage {

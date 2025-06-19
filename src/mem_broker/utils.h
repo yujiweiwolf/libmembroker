@@ -21,6 +21,8 @@ namespace co {
     std::string CreateInnerOrderNo(const co::fbs::TradeOrderT& order);
     std::string CreateInnerMatchNo(const co::fbs::TradeKnockT& knock);
     int64_t CreateOrderStatus(const co::fbs::TradeOrderT& order);
+    std::string CheckTradeOrderMessage(MemTradeOrderMessage *req, int sh_th_tps_limit, int sz_th_tps_limit);
+    std::string CheckTradeWithdrawMessage(MemTradeWithdrawMessage *req, int64_t trade_type);
 
     void Fix(co::fbs::TradeAssetT* asset);
     void Fix(co::fbs::TradePositionT* position);

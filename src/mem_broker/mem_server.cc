@@ -50,10 +50,30 @@ void MemBrokerServer::Run() {
     }
 
     rep_writer_.Open(opt_->mem_dir(), opt_->mem_rep_file(), kRepMemSize << 20, true);
-    broker_->Init(*opt_, this, &rep_writer_);
+    broker_->Init(*opt_, this);
+
+    auto& accounts = broker_->GetAccounts();
+    for (const auto& [key, value] : accounts) {
+        if (value.type == kTradeTypeSpot) {
+            sh_th_tps_limit_ = value.batch_order_size;
+            sz_th_tps_limit_ = value.batch_order_size;
+            for (auto& it : opt_->flow_controls()) {
+                if (co::kMarketSH == it->market()) {
+                    if (sh_th_tps_limit_ > it->th_tps_limit()) {
+                        sh_th_tps_limit_ = it->th_tps_limit();
+                    }
+                } else if (co::kMarketSZ == it->market()) {
+                    if (sz_th_tps_limit_ > it->th_tps_limit()) {
+                        sz_th_tps_limit_ = it->th_tps_limit();
+                    }
+                }
+            }
+            LOG_INFO << "account: " << key << ", sh_th_tps_limit: " << sh_th_tps_limit_ << ", sz_th_tps_limit: " << sz_th_tps_limit_;
+            break;
+        }
+    }
     LoadTradingData();
 
-    auto accounts = broker_->GetAccounts();
     string fc_spot_fund_id;
     for (auto itr = accounts.begin(); itr != accounts.end(); ++itr) {
         auto& acc = itr->second;
@@ -231,10 +251,12 @@ void MemBrokerServer::ReadReqMem() {
             if (type == kMemTypeTradeOrderReq) {
                 MemTradeOrderMessage *req = (MemTradeOrderMessage*) data;
                 int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * req->items_size;
-                string error;
-                risker_->HandleTradeOrderReq(req, &error);
+                string error = CheckTradeOrderMessage(req, sh_th_tps_limit_, sz_th_tps_limit_);
+                if (error.empty()) {
+                    risker_->HandleTradeOrderReq(req, &error);
+                }
                 if (!error.empty()) {
-                    char buffer[length] = {0};
+                    char buffer[length] = "";
                     memcpy(buffer, req, length);
                     MemTradeOrderMessage *rep = (MemTradeOrderMessage*)buffer;
                     strncpy(rep->error, error.c_str(), error.length());
@@ -245,10 +267,17 @@ void MemBrokerServer::ReadReqMem() {
             } else if (type == kMemTypeTradeWithdrawReq) {
                 MemTradeWithdrawMessage *req = (MemTradeWithdrawMessage*) data;
                 int length = sizeof(MemTradeWithdrawMessage);
-                string error;
-                risker_->HandleTradeWithdrawReq(req, &error);
+                int64_t trade_type = 0;
+                auto& accounts = broker_->GetAccounts();
+                if (auto it = accounts.find(req->fund_id); it != accounts.end()) {
+                    trade_type = it->second.type;
+                }
+                string error = CheckTradeWithdrawMessage(req, trade_type);
+                if (error.empty()) {
+                    risker_->HandleTradeWithdrawReq(req, &error);
+                }
                 if (!error.empty()) {
-                    char buffer[length] = {0};
+                    char buffer[sizeof(MemTradeWithdrawMessage)] = "";
                     memcpy(buffer, req, length);
                     MemTradeWithdrawMessage *rep = (MemTradeWithdrawMessage*)buffer;
                     strncpy(rep->error, error.c_str(), error.length());
@@ -340,6 +369,11 @@ void MemBrokerServer::HandleQueueMessage() {
                     }
                     case kMemTypeInnerCyclicSignal: {
                         DoWatch();
+                        break;
+                    }
+                    case kMemTypeMonitorRisk: {
+                        MemMonitorRiskMessage *msg = reinterpret_cast<MemMonitorRiskMessage*>(raw.data());
+                        SendMonitorRiskMessage(msg);
                         break;
                     }
                     default:
@@ -818,11 +852,19 @@ void  MemBrokerServer::SendTradeKnock(MemTradeKnock* knock) {
     }
 }
 
+void MemBrokerServer::SendMonitorRiskMessage(MemMonitorRiskMessage* msg) {
+    int length = sizeof(MemMonitorRiskMessage);
+    void* buffer = rep_writer_.OpenFrame(length);
+    memcpy(buffer, msg, length);
+    rep_writer_.CloseFrame(kMemTypeMonitorRisk);
+    LOG_INFO << msg->timestamp << ", " << msg->error;
+}
+
 void MemBrokerServer::SendRtnMessage(const std::string& raw, int64_t type) {
     queue_->Push(nullptr, type, raw);
  }
 
-void  MemBrokerServer::RunWatch() {
+void MemBrokerServer::RunWatch() {
     int64_t watch_interval_ms = 1000;
     while (true) {
         x::Sleep(watch_interval_ms);
@@ -830,7 +872,7 @@ void  MemBrokerServer::RunWatch() {
     }
 }
 
-void  MemBrokerServer::DoWatch() {
+void MemBrokerServer::DoWatch() {
     int64_t timeout_ms = 60000;
     int64_t now = x::RawDateTime();
     int64_t ms = x::SubRawDateTime(now, last_heart_beat_);
@@ -879,6 +921,10 @@ void  MemBrokerServer::DoWatch() {
         } else {
             ++itr;
         }
+    }
+
+    if (text.empty() && enable_flow_control_) {
+        text = flow_control_queue_->PopWarningMessage(node_name_);
     }
 
     if (text.empty() && (timeout_orders > 0 || timeout_withdraws > 0)) {

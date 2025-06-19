@@ -1,5 +1,6 @@
 #include "utils.h"
-
+#include <regex>
+#include <string>
 #include <boost/lexical_cast.hpp>
 
 namespace co {
@@ -187,6 +188,84 @@ namespace co {
             }
         }
        return inner_match_no;
+    }
+
+    std::string CheckTradeOrderMessage(MemTradeOrderMessage *req, int sh_th_tps_limit, int sz_th_tps_limit) {
+        if (req->items_size <= 0) {
+            return "no orders in request";
+        }
+        auto first = req->items;
+        int64_t first_market = 0;
+        for (int i = 0; i < req->items_size; ++i) {
+            auto order = first + i;
+            if (strlen(order->code) == 0) {
+                return "code is required";
+            }
+            int64_t market = co::CodeToMarket(order->code);
+            if (market <= 0) {
+                std::stringstream ss;
+                return ("unknown market suffix in code: " + string(order->code));
+            }
+            int max_batch_size = 0;
+            if (market == co::kMarketSH) {
+                max_batch_size = sh_th_tps_limit;
+            } else if (market == co::kMarketSH) {
+                max_batch_size = sz_th_tps_limit;
+            }
+            if (max_batch_size > 0 && req->items_size > max_batch_size) {
+                return ("too many orders in request: " + std::to_string(req->items_size) + ", up limit is: " + std::to_string(max_batch_size));
+            }
+
+            if (i == 0) {
+                first_market = market;
+            }
+            if (i > 0 && market != first_market) {
+                std::stringstream ss;
+                ss << "all orders must have the same market: order[0].code="
+                   << first->code << ", order[" << i << "].code=" << order->code;
+                return ss.str();
+            }
+            // --------------------------------------------------------------
+            //只允许放一天的逆回购
+            if (req->bs_flag == co::kBsFlagSell) {
+                if (market == kMarketSH && strncmp(order->code, "204", 3) == 0) {
+                    if (strcmp(order->code, "204001.SH") != 0) {
+                        return ("[FAN-Broker-RepoRiskError] only 1-Day repo code is allowed: " + string(order->code));
+                    }
+                } else if (market == kMarketSZ && strncmp(order->code, "1318", 4) == 0) {
+                    if (strcmp(order->code, "131810.SZ") != 0) {
+                        return ("[FAN-Broker-RepoRiskError] only 1-Day repo code is allowed: " + string(order->code));
+                    }
+                }
+            }
+        }
+        return "";
+    }
+
+    std::string CheckTradeWithdrawMessage(MemTradeWithdrawMessage *req, int64_t trade_type) {
+        if (strlen(req->order_no) == 0 && strlen(req->batch_no) == 0) {
+            return ("[FAN-BROKER-ERROR] order_no or batch_no is required");
+        }
+        if (trade_type == kTradeTypeSpot) {
+            if (strlen(req->order_no)) {
+                string order_no = req->order_no;
+                std::smatch result;
+                bool flag = regex_match(order_no, result, std::regex("^(1|2|3|9)-(*)$"));
+                if (!flag) {
+                    return ("not valid order_no: " + order_no);
+                }
+                return "";
+            }
+            if (strlen(req->batch_no)) {
+                string batch_no = req->batch_no;
+                std::smatch result;
+                bool flag = regex_match(batch_no, result, std::regex("^(1|2|3|9)-([0-9]{1,3})-(*)$"));
+                if (!flag) {
+                    return ("not valid order_no: " + batch_no);
+                }
+            }
+        }
+        return "";
     }
 
     int64_t CreateOrderStatus(const co::fbs::TradeOrderT& order) {

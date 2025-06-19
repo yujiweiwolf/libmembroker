@@ -6,8 +6,8 @@ namespace co {
         state_ = (MemFlowControlState*)frame_->mutable_data();
     }
 
-    FlowControlItem::FlowControlItem(int64_t timestamp, int64_t priority, int64_t cmd_size, double order_amount, int64_t timeout, BrokerMsg* msg):
-        timestamp_(timestamp), priority_(priority), cmd_size_(cmd_size), order_amount_(order_amount), timeout_(timeout), msg_(msg) {
+    FlowControlItem::FlowControlItem(int64_t timestamp, int64_t priority, int64_t cmd_size, double order_amount, double total_amount, int64_t timeout, BrokerMsg* msg):
+        timestamp_(timestamp), priority_(priority), cmd_size_(cmd_size), order_amount_(order_amount), total_amount_(total_amount), timeout_(timeout), msg_(msg) {
     }
 
     void FlowControlMarketQueue::InitState(std::shared_ptr<FlowControlStateHolder> state_holder) {
@@ -59,7 +59,7 @@ namespace co {
                         << th_daily_limit_ << "), market: " << market_ << ", req_cmd_size: " << sub_size
                         << ", total_cmd_size: " << total_cmd_size_;
                     std::string error = ss.str();
-                    ret = CreateErrorRep(&fbb_, item->msg(), error);
+                    ret = CreateErrorRep(item->msg(), error);
                     flow_control_queue_.pop_front();
                     cmd_size_ -= sub_size;
                     // 只要出现新的请求被打回，就需要持续播放警告，以防交易员漏听。通过设置pre_warning_total_cmd_size_为零来实现；
@@ -129,7 +129,7 @@ namespace co {
             }
             ss << item->cmd_size() << ", th_tps_limit: " << th_tps_limit_;
             std::string error = ss.str();
-            auto rep_msg = CreateErrorRep(&fbb_, item->msg(), error);
+            auto rep_msg = CreateErrorRep(item->msg(), error);
             normal_queue_.emplace_back(rep_msg);
             return;
         }
@@ -141,10 +141,13 @@ namespace co {
     void FlowControlMarketQueue::Sort() {
         if (need_sort_) {
             need_sort_ = false;
+//            std::stable_sort(flow_control_queue_.begin(), flow_control_queue_.end(), [](auto& lhs, auto& rhs) {
+//                // 排序优先级：撤单 > 申赎 > 其他，其他类型按委托金额从大到小排序；
+//                // 对于撤单，并没有按子委托数量进行排序，因为批量撤单只在手工界面使用，robot发送的全部是单笔撤单，按时间先后顺序排序问题不大；
+//                return lhs->priority() != rhs->priority() ? lhs->priority() > rhs->priority() : lhs->order_amount() > rhs->order_amount();
+//            });
             std::stable_sort(flow_control_queue_.begin(), flow_control_queue_.end(), [](auto& lhs, auto& rhs) {
-                // 排序优先级：撤单 > 申赎 > 其他，其他类型按委托金额从大到小排序；
-                // 对于撤单，并没有按子委托数量进行排序，因为批量撤单只在手工界面使用，robot发送的全部是单笔撤单，按时间先后顺序排序问题不大；
-                return lhs->priority() != rhs->priority() ? lhs->priority() < rhs->priority() : lhs->order_amount() > rhs->order_amount();
+                return lhs->total_amount() > rhs->total_amount();
             });
         }
     }
@@ -152,9 +155,6 @@ namespace co {
     void FlowControlMarketQueue::PopWarningMessage(const std::string& node_name, std::string* text) {
         if (th_daily_warning_ > 0 && total_cmd_size_ >= th_daily_warning_ && pre_warning_total_cmd_size_ != total_cmd_size_) {
             pre_warning_total_cmd_size_ = total_cmd_size_;
-//            LOG_WARN << "[watchdog] flow control daily command size warning, commands: "
-//                        << cmd_size_ << "/" << total_cmd_size_
-//                        << ", th_daily_warning: " << th_daily_warning_ << ", th_daily_limit: " << th_daily_limit_;
             std::stringstream ss;
             ss << "【" << node_name << "】[" << co::MarketToText(market_) << "]全天报撤单笔数已达到：" << total_cmd_size_ << "笔";
             if (th_daily_limit_ > 0 && total_cmd_size_ >= th_daily_limit_) {
@@ -162,10 +162,6 @@ namespace co {
             }
             (*text) = ss.str();
         } else if (triggered_flow_control_size_ > 0) {
-//            LOG_WARN << "[watchdog] flow control triggered, market: " << market_ << ", fc_current_size: "
-//                     << cmd_size_
-//                     << ", fc_triggered_size: " << triggered_flow_control_size_
-//                     << ", th_tps_limit: " << th_tps_limit_ << "/" << th_daily_warning_ << "/" << th_daily_limit_;
             std::stringstream ss;
             ss << "【" << node_name << "】[" << co::MarketToText(market_) << "]触发交易流控，排队长度：" << triggered_flow_control_size_;
             (*text) = ss.str();
@@ -194,33 +190,24 @@ namespace co {
            << ", fc_ahead: " << fc_ahead_ms << "ms, now: " << now_dt
            << ", timestamp: " << item->timestamp() << ", limit: " << request_timeout_ms_ << "ms";
         std::string error = ss.str();
-        return CreateErrorRep(&fbb_, item->msg(), error);
+        return CreateErrorRep(item->msg(), error);
     }
 
-    BrokerMsg* FlowControlMarketQueue::CreateErrorRep(flatbuffers::FlatBufferBuilder* fbb, BrokerMsg* msg, const std::string& error) {
+    BrokerMsg* FlowControlMarketQueue::CreateErrorRep(BrokerMsg* msg, const std::string& error) {
         int64_t req_function_id = msg->function_id();
-        if (req_function_id == kFuncFBTradeOrderReq) {
+        if (req_function_id == kMemTypeTradeOrderReq) {
             auto& raw = msg->data();
-            auto _req = flatbuffers::GetRoot<co::fbs::TradeOrderMessage>(raw.data());
-            co::fbs::TradeOrderMessageT rep;
-            _req->UnPackTo(&rep);
-            rep.error = error;
-            fbb->Clear();
-            fbb->Finish(co::fbs::TradeOrderMessage::Pack(*fbb, &rep));
-            std::string rep_raw((const char*)fbb->GetBufferPointer(), fbb->GetSize());
-            msg->set_function_id(kFuncFBTradeOrderRep);
-            msg->set_data(rep_raw);
-        } else if (req_function_id == kFuncFBTradeWithdrawReq) {
+            int64_t length = raw.length();
+            MemTradeOrderMessage *rep = (MemTradeOrderMessage*)raw.data();
+            strncpy(rep->error, error.c_str(), error.length());
+            msg->set_function_id(kMemTypeTradeOrderRep);
+            msg->set_data(string(reinterpret_cast<const char*>(rep), length));
+        } else if (req_function_id == kMemTypeTradeWithdrawReq) {
             auto& raw = msg->data();
-            auto _req = flatbuffers::GetRoot<co::fbs::TradeWithdrawMessage>(raw.data());
-            co::fbs::TradeWithdrawMessageT rep;
-            _req->UnPackTo(&rep);
-            rep.error = error;
-            fbb->Clear();
-            fbb->Finish(co::fbs::TradeWithdrawMessage::Pack(*fbb, &rep));
-            std::string rep_raw((const char*)fbb->GetBufferPointer(), fbb->GetSize());
-            msg->set_function_id(kFuncFBTradeWithdrawRep);
-            msg->set_data(rep_raw);
+            MemTradeWithdrawMessage *rep = (MemTradeWithdrawMessage*)raw.data();
+            strncpy(rep->error, error.c_str(), error.length());
+            msg->set_function_id(kMemTypeTradeOrderRep);
+            msg->set_data(string(reinterpret_cast<const char*>(rep), sizeof(MemTradeWithdrawMessage)));
         } else {
             throw std::runtime_error("[FAN-Broker-NeverHappenError]");
         }
@@ -364,10 +351,6 @@ namespace co {
             int64_t items_size = req->items_size;
             int64_t market = 0;
             MemTradeOrder* items = req->items;
-//            for (int i = 0; i < msg->items_size; i++) {
-//                MemTradeOrder* order = items + i;
-//                LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
-//            }
             if (items_size > 0) {
                 MemTradeOrder* first = items;
                 market = first->market;
@@ -392,20 +375,21 @@ namespace co {
                         order_amount += item->price * (double)item->volume;
                     }
                 }
+                double total_amount = priority_type * kItemMultiple + order_amount;
                 int64_t timeout = req->timeout > 0 && req->timeout < request_timeout_ms_ ? req->timeout : request_timeout_ms_;
-                auto item = std::make_unique<FlowControlItem>(timestamp, priority_type, items_size, order_amount, timeout, msg);
+                auto item = std::make_unique<FlowControlItem>(timestamp, priority_type, items_size, order_amount, total_amount, timeout, msg);
                 queue->Push(std::move(item));
             } else {
                 bool is_required = FlowControlQueue::IsFlowControlRequiredMarket(market);
                 if (is_required) {
                     std::string error = "[FAN-Broker-FlowControlError] no flow control config for market: " + std::to_string(market);
-                    msg = FlowControlMarketQueue::CreateErrorRep(&fbb_, msg, error);
+                    msg = FlowControlMarketQueue::CreateErrorRep(msg, error);
                     normal_queue_.emplace_back(msg);
                 } else {
                     normal_queue_.emplace_back(msg);
                 }
             }
-        } else if (function_id == kFuncFBTradeWithdrawReq) {
+        } else if (function_id == kMemTypeTradeWithdrawReq) {
             auto& raw = msg->data();
             auto req = flatbuffers::GetRoot<co::fbs::TradeWithdrawMessage>(raw.data());
             int64_t market = 0;
@@ -425,7 +409,7 @@ namespace co {
                     ss << "batch_no is forbidden: " << (req->batch_no() ? req->batch_no()->str() : "");
                 }
                 std::string error = ss.str();
-                msg = FlowControlMarketQueue::CreateErrorRep(&fbb_, msg, error);
+                msg = FlowControlMarketQueue::CreateErrorRep(msg, error);
                 normal_queue_.emplace_back(msg);
             } else {
                 auto itr = market_to_queue_.find(market);
@@ -434,13 +418,14 @@ namespace co {
                     int64_t timestamp = 0;
                     int64_t priority_type = kFlowControlPriorityWithdraw;
                     double order_amount = 0;
-                    auto item = std::make_unique<FlowControlItem>(timestamp, priority_type, batch_size, order_amount, 0, msg);
+                    double total_amount = priority_type * kItemMultiple + order_amount;
+                    auto item = std::make_unique<FlowControlItem>(timestamp, priority_type, batch_size, order_amount, total_amount, 0, msg);
                     queue->Push(std::move(item));
                 } else {
                     bool is_required = FlowControlQueue::IsFlowControlRequiredMarket(market);
                     if (is_required) {
                         std::string error = "[FAN-Broker-FlowControlError] no flow control config for market: " + std::to_string(market);
-                        msg = FlowControlMarketQueue::CreateErrorRep(&fbb_, msg, error);
+                        msg = FlowControlMarketQueue::CreateErrorRep(msg, error);
                         normal_queue_.emplace_back(msg);
                     } else {
                         normal_queue_.emplace_back(msg);

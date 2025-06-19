@@ -96,10 +96,6 @@ class MemBrokerOptions {
         return enable_query_only_;
     }
 
-    inline std::string wal() const {
-        return wal_;
-    }
-
     inline bool enable_upload() const {
         return enable_upload_;
     }

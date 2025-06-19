@@ -27,7 +27,7 @@ fake1:
     - {fund_id: "F1", trade_type: "future", markets: [".CFFEX", ".DCE"]}
     - {fund_id: "O1", trade_type: "option", markets: [".SH", ".SZ"]}
 
-# 机器上的所有帐号
+# 机器上的所有帐号都默认这个配置，即使不填也是此配置
 risk:
   accounts:
     - {fund_id: "S1", risker_id: "fancapital", disabled: false, enable_prevent_self_knock: true, only_etf_anti_self_knock: false}

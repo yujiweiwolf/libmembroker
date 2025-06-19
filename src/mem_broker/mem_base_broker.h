@@ -10,14 +10,14 @@
 
 namespace co {
 
-class  MemBrokerServer;
+class MemBrokerServer;
 
 class MemBroker {
  public:
     MemBroker();
     virtual ~MemBroker();
 
-    void Init(const MemBrokerOptions& opt, MemBrokerServer* server, x::MMapWriter* rep_writer);
+    void Init(const MemBrokerOptions& opt, MemBrokerServer* server);
 
     const std::map<string, MemTradeAccount>& GetAccounts() const;
     co::MemTradeAccount* GetAccount(const string& fund_id);
@@ -58,7 +58,6 @@ class MemBroker {
     int64_t CheckTimeout(int64_t request_time, int64_t ttl_ms);
 
  private:
-    x::MMapWriter* rep_writer_;
     MemBrokerServer* server_ = nullptr;
     std::map<string, MemTradeAccount> accounts_;  // 支持的所有资金账号，由底层在on_init()初始化函数中填写， fund_id -> trade_type
     bool enable_stock_short_selling_ = false;  // 是否启用股票自动融券买卖

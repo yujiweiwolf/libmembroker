@@ -2,8 +2,8 @@
 cmake_minimum_required(VERSION 3.19)
 project(libmembroker)
 
-set(CMAKE_BUILD_TYPE "Debug") #Release Debug
-set(CMAKE_CXX_STANDARD 17 -Wall -O2)
+set(CMAKE_BUILD_TYPE "Debug") # Release Debug
+add_compile_options(-std=c++17) # -std=c++17 -Wall -O2
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
 
@@ -43,13 +43,15 @@ add_executable(imitative_broker ${MEM_TEST_LIST})
 target_link_libraries(imitative_broker
         membroker risker coral swordfish x stdc++fs yaml-cpp  clickhouse-cpp-lib-static boost_date_time boost_filesystem boost_regex boost_system  boost_chrono boost_log boost_program_options boost_thread boost_iostreams boost_context boost_coroutine z protobuf protobuf-lite sodium zmq ssl crypto iconv pthread dl)
 
-add_executable(send_req src/send_req/send_req.cc)
-target_link_libraries(send_req
-        coral swordfish x stdc++fs yaml-cpp  clickhouse-cpp-lib-static boost_date_time boost_filesystem boost_regex boost_system  boost_chrono boost_log boost_program_options boost_thread boost_iostreams boost_context boost_coroutine z protobuf protobuf-lite sodium zmq ssl crypto iconv pthread dl)
+#add_executable(send_req src/send_req/send_req.cc)
+#target_link_libraries(send_req
+#        coral swordfish x stdc++fs yaml-cpp  clickhouse-cpp-lib-static boost_date_time boost_filesystem boost_regex boost_system  boost_chrono boost_log boost_program_options boost_thread boost_iostreams boost_context boost_coroutine z protobuf protobuf-lite sodium zmq ssl crypto iconv pthread dl)
 
-#SET(ROOT_DIR "/home/work/sys/lib")
-#FILE(GLOB COMMON_LIB_NAME "${ROOT_DIR}/common_lib/lib/*so*")
-#FILE(COPY ${COMMON_LIB_NAME} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+aux_source_directory (src/gtest/test_membroker TESTBROKER)
+add_executable(gtest_broker ${TESTBROKER})
+target_link_libraries(gtest_broker
+        gtest gtest_main membroker coral swordfish x stdc++fs yaml-cpp  clickhouse-cpp-lib-static boost_date_time boost_filesystem boost_regex boost_system  boost_chrono boost_log boost_program_options boost_thread boost_iostreams z protobuf protobuf-lite sodium zmq ssl crypto iconv pthread dl)
+
 
 add_custom_target(cpplint COMMAND cpplint --recursive ${CMAKE_CURRENT_SOURCE_DIR}/src/mem_broker/*.*)
 

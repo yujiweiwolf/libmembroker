@@ -123,6 +123,7 @@ class MemBrokerServer {
     void SendTradeOrderRep(MemTradeOrderMessage* rep);
     void SendTradeWithdrawRep(MemTradeWithdrawMessage* rep);
     void SendTradeKnock(MemTradeKnock* knock);
+    void SendMonitorRiskMessage(MemMonitorRiskMessage* msg);
 
  private:
     MemBrokerOptionsPtr opt_;
@@ -131,10 +132,11 @@ class MemBrokerServer {
     std::string node_name_;
     std::vector<std::shared_ptr<std::thread>> threads_;
 
-
     std::map<std::string, QueryContext*> asset_contexts_;
     std::map<std::string, QueryContext*> position_contexts_;
     std::map<std::string, QueryContext*> knock_contexts_;
+    int sh_th_tps_limit_ = 1;
+    int sz_th_tps_limit_ = 1;
 
     std::map<std::string, MemTradeAsset> assets_;
     std::map<std::string, std::shared_ptr<std::map<std::string, MemTradePosition>>> positions_;  // fund_id -> {code -> obj}
