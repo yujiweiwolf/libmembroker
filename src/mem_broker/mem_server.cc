@@ -24,6 +24,7 @@ void MemBrokerServer::Init(MemBrokerOptionsPtr option, const std::vector<std::sh
     opt_ = option;
     broker_ = broker;
     risker_->Init(risk_opts);
+    risker_->Start();
     enable_flow_control_ = opt_->IsFlowControlEnabled();
     if (enable_flow_control_) {
         flow_control_queue_->Init(opt_);
@@ -93,7 +94,7 @@ void MemBrokerServer::Run() {
 
 void MemBrokerServer::LoadTradingData() {
     LOG_INFO << "load trading data ...";
-    auto t1 = x::Timestamp();
+    auto t1 = x::UnixMilli();
     x::MMapReader rep_reader;
     rep_reader.Open(opt_->mem_dir(), opt_->mem_rep_file(), false);
     const void* data = nullptr;
@@ -137,7 +138,7 @@ void MemBrokerServer::LoadTradingData() {
         auto all = itr.second;
         position_rows += all->size();
     }
-    auto t2 = x::Timestamp();
+    auto t2 = x::UnixMilli();
     LOG_INFO << "load trading data ok in " << (t2 - t1)
              << "ms, asset: " << assets_.size()
              << ", position: " << position_rows
@@ -149,7 +150,7 @@ bool MemBrokerServer::ExitAccount(const string& fund_id) {
  }
 
 void MemBrokerServer::BeginTask() {
-    active_task_timestamp_ = x::Timestamp();
+    active_task_timestamp_ = x::UnixMilli();
 }
 
 void  MemBrokerServer::EndTask() {
@@ -401,21 +402,21 @@ void MemBrokerServer::RunQuery() {
             auto ctx = new QueryContext();
             ctx->set_fund_id(fund_id);
             ctx->set_fund_name(fund_name);
-            ctx->set_last_success_time(x::Timestamp());
+            ctx->set_last_success_time(x::UnixMilli());
             asset_contexts_[fund_id] = ctx;
         }
         if (query_position_ms > 0) {
             auto ctx = new QueryContext();
             ctx->set_fund_id(fund_id);
             ctx->set_fund_name(fund_name);
-            ctx->set_last_success_time(x::Timestamp());
+            ctx->set_last_success_time(x::UnixMilli());
             position_contexts_[fund_id] = ctx;
         }
         if (query_knock_ms > 0) {
             auto ctx = new QueryContext();
             ctx->set_fund_id(fund_id);
             ctx->set_fund_name(fund_name);
-            ctx->set_last_success_time(x::Timestamp());
+            ctx->set_last_success_time(x::UnixMilli());
             knock_contexts_[fund_id] = ctx;
         }
     }
@@ -425,10 +426,10 @@ void MemBrokerServer::RunQuery() {
     int64_t asset_timeout_ms = query_asset_ms < 5000 ? 5000 : query_asset_ms;
     int64_t position_timeout_ms = query_position_ms < 10000 ? 10000 : query_position_ms;
     int64_t knock_timeout_ms = query_knock_ms < 10000 ? 10000 : query_knock_ms;
-    int64_t start_time = x::Timestamp();
+    int64_t start_time = x::UnixMilli();
     while (true) {
         x::Sleep(100);
-        int64_t now = x::Timestamp();
+        int64_t now = x::UnixMilli();
         for (auto& itr : asset_contexts_) {
             auto ctx = itr.second;
             int64_t max_time = ctx->rep_time() >= ctx->req_time() ? ctx->rep_time() : ctx->req_time();
@@ -553,7 +554,7 @@ void MemBrokerServer::SendQueryTradeAssetRep(MemGetTradeAssetMessage* rep) {
         ctx = itr_cursor->second;
     }
     if (ctx) {
-        int64_t now = x::Timestamp();
+        int64_t now = x::UnixMilli();
         ctx->set_rep_time(now);
         if (error.empty()) {
             ctx->set_last_success_time(now);
@@ -615,7 +616,7 @@ void MemBrokerServer::SendQueryTradePositionRep(MemGetTradePositionMessage* rep)
         ctx = itr_cursor->second;
     }
     if (ctx) {
-        int64_t now = x::Timestamp();
+        int64_t now = x::UnixMilli();
         ctx->set_rep_time(now);
         if (error.empty()) {
             ctx->set_last_success_time(now);
@@ -723,7 +724,7 @@ void MemBrokerServer::SendQueryTradeKnockRep(MemGetTradeKnockMessage* rep) {
         ctx = itr_cursor->second;
     }
     if (ctx) {
-        int64_t now = x::Timestamp();
+        int64_t now = x::UnixMilli();
         ctx->set_rep_time(now);
         if (error.empty()) {
             ctx->set_last_success_time(now);
@@ -942,7 +943,7 @@ void MemBrokerServer::DoWatch() {
     if (text.empty() && active_task_timestamp_ > 0) {
         int64_t begin_ts = active_task_timestamp_;
         if (begin_ts > 0) {
-            int64_t delay_s = x::SubRawDateTime(x::Timestamp(), begin_ts) / 1000;
+            int64_t delay_s = x::SubRawDateTime(x::UnixMilli(), begin_ts) / 1000;
             if (delay_s > 10) {
                 LOG_WARN << "[watchdog] broker has been blocked for " << delay_s << "s";
                 if (delay_s < 60) {
@@ -962,7 +963,7 @@ void MemBrokerServer::DoWatch() {
                 min_time = ctx->last_success_time();
             }
         }
-        int64_t delay_s = (x::Timestamp() - min_time) / 1000;
+        int64_t delay_s = (x::UnixMilli() - min_time) / 1000;
         if (delay_s > 60) {
             LOG_WARN << "[watchdog] query asset failed for " << delay_s << "s";
             text = "柜台状态异常：【" + node_name_ + "】查询资金失败超过：" + std::to_string(delay_s) + "秒";
@@ -978,7 +979,7 @@ void MemBrokerServer::DoWatch() {
             LOG_INFO << "query pos contexts, fund_id: " << ctx->fund_id() << ", req_time: " << ctx->req_time()
                             << ", rep_time: " << ctx->rep_time() << ", last_success_time: " << ctx->last_success_time();
         }
-        int64_t delay_s = (x::Timestamp() - min_time) / 1000;
+        int64_t delay_s = (x::UnixMilli() - min_time) / 1000;
         if (delay_s > 60) {
             LOG_WARN << "[watchdog] query position failed for " << delay_s << "s";
             text = "柜台状态异常：【" + node_name_ + "】查询持仓失败超过：" + std::to_string(delay_s) + "秒";
@@ -993,7 +994,7 @@ void MemBrokerServer::DoWatch() {
                 min_time = ctx->last_success_time();
             }
         }
-        int64_t delay_s = (x::Timestamp() - min_time) / 1000;
+        int64_t delay_s = (x::UnixMilli() - min_time) / 1000;
         if (delay_s > 60) {
             LOG_WARN << "[watchdog] query knock failed for " << delay_s << "s";
             text = "柜台状态异常：【" + node_name_ + "】查询成交失败超过：" + std::to_string(delay_s) + "秒";

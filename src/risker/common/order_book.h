@@ -4,7 +4,7 @@
 #include "coral/coral.h"
 
 namespace co {
-const int64_t kOrderTimeoutMS = 30000;
+const int64_t kOrderTimeoutMS = 3000;
 const double kRiskOrderPriceEpsilon = 0.000001;
 
 inline bool PriceEquals(double a, double b) {
@@ -38,7 +38,7 @@ inline double DecodePrice(int64_t price) {
 class Order {
  public:
     Order();
-    bool IsFinished(const int64_t& now = 0) const;
+    bool IsFinished();
 
  public:
     int64_t create_time = 0;
@@ -54,6 +54,7 @@ class Order {
     int64_t match_volume = 0;
     int64_t withdraw_failed_time = 0;  // 撤单失败的时间，如果撤单失败, 过段时间还没收到撤单成交回报, 自成交检查时认为已经撤单//
     bool withdraw_succeed = false;  // 撤单成功标志, 没收到撤单成交回报, 自成交检查时认为已经撤单//
+    bool finish_flag = false;
 };
 
 typedef std::shared_ptr<Order> OrderPtr;
@@ -65,11 +66,7 @@ class OrderBook {
 
     std::string HandleTradeOrderReq(MemTradeOrder* order, int64_t bs_flag);
     void OnTradeOrderReqPass(OrderPtr order);
-    OrderPtr HandleTradeOrderRep(const std::string& message_id,
-                                 const std::string& fund_id,
-                                 const std::string& batch_no,
-                                 int64_t bs_flag,
-                                 MemTradeOrder* order);
+    OrderPtr HandleTradeOrderRep(MemTradeOrderMessage* rep, MemTradeOrder* order);
     void OnTick(MemQTickBody* tick);
 
  private:

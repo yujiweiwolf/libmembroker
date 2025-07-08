@@ -62,23 +62,21 @@ std::string FCCreateBatchOrder(int64_t batch_size, const std::string& id, const 
 }
 
 std::string FCCreateWithdraw(const std::string& id, const std::string& fund_id, int64_t timestamp, const std::string& order_no) {
-    char buffer[sizeof(co::MemTradeWithdrawMessage)] = "";
-    co::MemTradeWithdrawMessage* req = (co::MemTradeWithdrawMessage*)buffer;
-    req->timestamp = timestamp;
-    strncpy(req->id, id.c_str(), id.length());
-    strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
-    strncpy(req->order_no, order_no.c_str(), order_no.length());
-    std::string raw = string(static_cast<const char*>(buffer), sizeof(co::MemTradeWithdrawMessage));
+    co::MemTradeWithdrawMessage req = {};
+    req.timestamp = timestamp;
+    strncpy(req.id, id.c_str(), id.length());
+    strncpy(req.fund_id, fund_id.c_str(), fund_id.length());
+    strncpy(req.order_no, order_no.c_str(), order_no.length());
+    std::string raw = string(reinterpret_cast<char*>(&req), sizeof(req));
     return raw;
 }
 
 std::string FCCreateBatchWithdraw(const std::string& id, const std::string& fund_id, int64_t timestamp, const std::string& batch_no) {
-    char buffer[sizeof(co::MemTradeWithdrawMessage)] = "";
-    co::MemTradeWithdrawMessage* req = (co::MemTradeWithdrawMessage*)buffer;
-    req->timestamp = timestamp;
-    strncpy(req->id, id.c_str(), id.length());
-    strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
-    strncpy(req->batch_no, batch_no.c_str(), batch_no.length());
-    std::string raw = string(static_cast<const char*>(buffer), sizeof(co::MemTradeWithdrawMessage));
+    co::MemTradeWithdrawMessage req = {};
+    req.timestamp = timestamp;
+    strncpy(req.id, id.c_str(), id.length());
+    strncpy(req.fund_id, fund_id.c_str(), fund_id.length());
+    strncpy(req.batch_no, batch_no.c_str(), batch_no.length());
+    std::string raw = string(reinterpret_cast<char*>(&req), sizeof(req));
     return raw;
 }

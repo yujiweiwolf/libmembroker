@@ -13,6 +13,8 @@ class RiskMaster {
 
     void Init(const std::vector<std::shared_ptr<RiskOptions>>& opts);
 
+    void Start();
+
     void HandleTradeOrderReq(MemTradeOrderMessage* req, std::string* error);
 
     void HandleTradeOrderRep(MemTradeOrderMessage* rep);

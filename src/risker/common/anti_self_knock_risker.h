@@ -55,7 +55,7 @@ class AntiSelfKnockRisker : public Risker {
     OrderBook* MustGetOrderBook(const std::string& code);
     OrderBook* TryGetOrderBook(const std::string& code);
     bool IsETF(const std::string& code);
-    std::string CreateOrderNoKey(const std::string& fund_id, const std::string& order_no);
+    std::string CreateOrderNoKey(const std::string_view& fund_id, const std::string_view& key);
 
  private:
     std::unordered_map<std::string, AntiSelfKnockOption*> options_;  // fund_id -> option

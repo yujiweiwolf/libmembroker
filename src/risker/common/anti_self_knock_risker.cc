@@ -7,7 +7,7 @@ namespace co {
 AntiSelfKnockOption::AntiSelfKnockOption(std::shared_ptr<RiskOptions> opt) {
     fund_id_ = opt->fund_id();
     only_etf_ = opt->GetBool("prevent_self_knock_only_etf");
-    tag_ = "[" + fund_id_ + "-" + opt->account()->name + "]";
+    tag_ = "[" + fund_id_ + "-" + opt->GetStr("name") + "]";
 }
 
 void AntiSelfKnockRisker::AddOption(std::shared_ptr<RiskOptions> opt) {
@@ -68,8 +68,8 @@ void AntiSelfKnockRisker::OnTradeOrderReqPass(MemTradeOrderMessage* req) {
     bool only_etf = opt->only_etf();
     MemTradeOrder* items = req->items;
     for (int i = 0; i < req->items_size; i++) {
-        MemTradeOrder* order = items + i;
-        std::string code = order->code;
+        MemTradeOrder* item = items + i;
+        std::string code = item->code;
         if (!only_etf || IsETF(code)) {
             auto order = std::make_shared<Order>();
             order->message_id = message_id;
@@ -77,8 +77,8 @@ void AntiSelfKnockRisker::OnTradeOrderReqPass(MemTradeOrderMessage* req) {
             order->fund_id = fund_id;
             order->code = code;
             order->bs_flag = req->bs_flag;
-            order->volume = order->volume;
-            order->price = order->price;
+            order->volume = item->volume;
+            order->price = item->price;
             auto book = MustGetOrderBook(code);
             book->OnTradeOrderReqPass(order);
         }
@@ -86,7 +86,6 @@ void AntiSelfKnockRisker::OnTradeOrderReqPass(MemTradeOrderMessage* req) {
 }
 
 void AntiSelfKnockRisker::HandleTradeOrderRep(MemTradeOrderMessage* rep) {
-    std::string message_id = rep->id;
     std::string fund_id = rep->fund_id;
     std::string batch_no = rep->batch_no;
     auto opt = GetOption(fund_id);
@@ -103,7 +102,7 @@ void AntiSelfKnockRisker::HandleTradeOrderRep(MemTradeOrderMessage* rep) {
         if (!only_etf || IsETF(code)) {
             std::string order_no = order->order_no;
             auto book = MustGetOrderBook(code);
-            auto active_order = book->HandleTradeOrderRep(message_id, fund_id, batch_no, rep->bs_flag, order);
+            auto active_order = book->HandleTradeOrderRep(rep, order);
             if (active_order) {
                 if (!order_no.empty()) {
                     std::string key = CreateOrderNoKey(fund_id, order_no);
@@ -120,6 +119,11 @@ void AntiSelfKnockRisker::HandleTradeOrderRep(MemTradeOrderMessage* rep) {
                     }
                     orders->emplace_back(active_order);
                 }
+            } else {
+                LOG_INFO << "order is null, fund_id: " << rep->fund_id
+                                << ", code: " << order->code
+                                << ", order_no: " << order->order_no
+                                << ", error: " << order->error;
             }
         }
     }
@@ -145,7 +149,7 @@ std::string AntiSelfKnockRisker::HandleTradeWithdrawReq(MemTradeWithdrawMessage*
         if (itr != batch_orders_.end()) {
             auto& orders = itr->second;
             for (auto& order: *orders) {
-                order->withdraw_failed_time = x::Timestamp();
+                order->withdraw_failed_time = x::UnixMilli();
             }
         }
     } else if (!order_no.empty()) {
@@ -153,7 +157,7 @@ std::string AntiSelfKnockRisker::HandleTradeWithdrawReq(MemTradeWithdrawMessage*
         auto itr = single_orders_.find(key);
         if (itr != single_orders_.end()) {
             auto& order = itr->second;
-            order->withdraw_failed_time = x::Timestamp();
+            order->withdraw_failed_time = x::UnixMilli();
         }
     }
     return "";
@@ -173,7 +177,7 @@ void AntiSelfKnockRisker::HandleTradeWithdrawRep(MemTradeWithdrawMessage* rep) {
                 // @TODO 如果确认是柜台返回的撤单失败，说明委托已经被撤单了，或者已经成交完了；
                 // 如果仅仅是自由系统内部返回的撤单失败，不应该处理。
                 for (auto& order: *orders) {
-                    order->withdraw_failed_time = x::Timestamp();
+                    order->withdraw_failed_time = x::UnixMilli();
                 }
             } else {  // 撤单成功
                 for (auto& order: *orders) {
@@ -188,7 +192,7 @@ void AntiSelfKnockRisker::HandleTradeWithdrawRep(MemTradeWithdrawMessage* rep) {
         if (itr != single_orders_.end()) {
             auto& order = itr->second;
             if (!error.empty()) {  // 撤单失败
-                order->withdraw_failed_time = x::Timestamp();
+                order->withdraw_failed_time = x::UnixMilli();
             } else {  // 撤单成功
                 order->withdraw_succeed = true;
                 single_orders_.erase(itr);
@@ -287,10 +291,13 @@ bool AntiSelfKnockRisker::IsETF(const std::string& code) {
     return ok;
 }
 
-std::string AntiSelfKnockRisker::CreateOrderNoKey(const std::string& fund_id, const std::string& order_no) {
-    std::stringstream ss;
-    ss << fund_id << "#" << order_no;
-    return ss.str();
+std::string AntiSelfKnockRisker::CreateOrderNoKey(const std::string_view& fund_id, const std::string_view& key) {
+    std::string result;
+    result.reserve(fund_id.size() + 1 + key.size());
+    result += fund_id;
+    result += "#";
+    result += key;
+    return result;
 }
 
 void AntiSelfKnockRisker::OnTick(MemQTickBody* tick) {

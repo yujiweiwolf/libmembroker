@@ -2,7 +2,7 @@
 #include <unordered_map>
 #include "yaml-cpp/yaml.h"
 #include "coral/coral.h"
-#include "../../src/risker/risk_master.h"
+#include "risk_master.h"
 #include "common/anti_self_knock_risker.h"
 #include "fancapital/fancapital_risker.h"
 
@@ -68,8 +68,7 @@ void RiskMaster::RiskMasterImpl::Init(const std::vector<std::shared_ptr<RiskOpti
         if (risker_id == kRiskerFancapital) {
             account_risker = new FancapitalRisker();
         } else {
-            LOG_ERROR << "[risk] unknown risker_id: " << risker_id << ", fund_id: " << fund_id;
-            continue;
+            LOG_INFO << "[risk] unknown risker_id: " << risker_id << ", fund_id: " << fund_id;
         }
 
         auto riskers = new std::vector<Risker*>();
@@ -88,7 +87,6 @@ void RiskMaster::RiskMasterImpl::Init(const std::vector<std::shared_ptr<RiskOpti
             riskers->push_back(&anti_risker_);
         }
         routes_[fund_id] = riskers;
-        Start();
     }
 }
 
@@ -106,14 +104,14 @@ void RiskMaster::RiskMasterImpl::Run() {
                 throw std::runtime_error(e.what());
             }
         };
-        std::string filename = x::FindFile("broker.yaml");
+
+        auto filename = x::FindFile("broker.yaml");
         YAML::Node root = YAML::LoadFile(filename);
         auto broker = root["broker"];
         string mem_dir = getStr(broker, "mem_dir");
-        string mem_rep_file = getStr(broker, mem_rep_file);
-        auto risk = root["riseker"];
-        string feeder_dir = getStr(risk, feeder_dir);
-
+        string mem_rep_file = getStr(broker, "mem_rep_file");
+        auto risk = root["risk"];
+        string feeder_dir = getStr(risk, "feeder_dir");
         x::MMapReader reader;
         // 本帐号，事前风控; 其它帐号，事后风控
         reader.Open(mem_dir, mem_rep_file, false);
@@ -194,7 +192,7 @@ void RiskMaster::RiskMasterImpl::Run() {
                         auto riskers = GetRiskers(rep->fund_id);
                         if (riskers) {
                             for (auto& risker : *riskers) {
-                                risker->HandleTradeOrderReq(rep);
+                                risker->HandleTradeOrderRep(rep);
                             }
                         }
                         break;
@@ -224,49 +222,49 @@ void RiskMaster::RiskMasterImpl::Run() {
                     }
                 }
             }
-            while (true) {
-                int32_t type = reader.Next(&data);
-                switch (type) {
-                    case kMemTypeQTickBody : {
-                        MemQTickBody *tick = (MemQTickBody *) data;
-                        anti_risker_.OnTick(tick);
-                        break;
-                    }
-                    case kMemTypeTradeOrderRep: {
-                        MemTradeOrderMessage *rep = reinterpret_cast<MemTradeOrderMessage*>(raw.data());
-                        auto riskers = GetRiskers(rep->fund_id);
-                        if (riskers) {
-                            for (auto& risker : *riskers) {
-                                risker->HandleTradeOrderReq(rep);
-                            }
-                        }
-                        break;
-                    }
-                    case kMemTypeTradeWithdrawRep: {
-                        MemTradeWithdrawMessage *rep = reinterpret_cast<MemTradeWithdrawMessage*>(raw.data());
-                        auto riskers = GetRiskers(rep->fund_id);
-                        if (riskers) {
-                            for (auto& risker : *riskers) {
-                                risker->HandleTradeWithdrawRep(rep);
-                            }
-                        }
-                        break;
-                    }
-                    case kMemTypeTradeKnock: {
-                        MemTradeKnock *knock = reinterpret_cast<MemTradeKnock*>(raw.data());
-                        auto riskers = GetRiskers(knock->fund_id);
-                        if (riskers) {
-                            for (auto& risker : *riskers) {
-                                risker->OnTradeKnock(knock);
-                            }
-                        }
-                        break;
-                    }
-                    default: {
-                        break;
-                    }
-                }
-            }
+//            while (true) {
+//                int32_t type = reader.Next(&data);
+//                switch (type) {
+//                    case kMemTypeQTickBody : {
+//                        MemQTickBody *tick = (MemQTickBody *) data;
+//                        anti_risker_.OnTick(tick);
+//                        break;
+//                    }
+//                    case kMemTypeTradeOrderRep: {
+//                        MemTradeOrderMessage *rep = reinterpret_cast<MemTradeOrderMessage*>(raw.data());
+//                        auto riskers = GetRiskers(rep->fund_id);
+//                        if (riskers) {
+//                            for (auto& risker : *riskers) {
+//                                risker->HandleTradeOrderReq(rep);
+//                            }
+//                        }
+//                        break;
+//                    }
+//                    case kMemTypeTradeWithdrawRep: {
+//                        MemTradeWithdrawMessage *rep = reinterpret_cast<MemTradeWithdrawMessage*>(raw.data());
+//                        auto riskers = GetRiskers(rep->fund_id);
+//                        if (riskers) {
+//                            for (auto& risker : *riskers) {
+//                                risker->HandleTradeWithdrawRep(rep);
+//                            }
+//                        }
+//                        break;
+//                    }
+//                    case kMemTypeTradeKnock: {
+//                        MemTradeKnock *knock = reinterpret_cast<MemTradeKnock*>(raw.data());
+//                        auto riskers = GetRiskers(knock->fund_id);
+//                        if (riskers) {
+//                            for (auto& risker : *riskers) {
+//                                risker->OnTradeKnock(knock);
+//                            }
+//                        }
+//                        break;
+//                    }
+//                    default: {
+//                        break;
+//                    }
+//                }
+//            }
         }
     } catch (std::exception& e) {
         LOG_ERROR << "[risk][master] risk master is crashed: " << e.what();
@@ -278,6 +276,15 @@ std::vector<Risker*>* RiskMaster::RiskMasterImpl::GetRiskers(const std::string& 
     auto itr = routes_.find(fund_id);
     if (itr != routes_.end()) {
         riskers = itr->second;
+    } else {
+        riskers = new std::vector<Risker*>();
+        std::shared_ptr<RiskOptions> opt = std::make_shared<RiskOptions>();
+        opt->set_fund_id(fund_id);
+        std::string data = "{\"TYPE\":8,\"enable_prevent_self_knock\":true,\"only_etf_anti_self_knock\":false,\"white_list\":\"192.168.0.1,192.168.161.105,18:26:49:3E:A6:51\"}";
+        opt->set_data(data);
+        anti_risker_.AddOption(opt);
+        riskers->push_back(&anti_risker_);
+        routes_[fund_id] = riskers;
     }
     return riskers;
 }
@@ -286,12 +293,17 @@ void RiskMaster::Init(const std::vector<std::shared_ptr<RiskOptions>>& opts) {
     m_->Init(opts);
 }
 
+void RiskMaster::Start() {
+    m_->Start();
+}
+
 void RiskMaster::HandleTradeOrderReq(MemTradeOrderMessage* req, std::string* error) {
     if (m_->async_state_.load() != kAsyncStateIdle) {
         throw std::runtime_error("unexpected async state");
     }
     m_->async_state_.store(kAsyncStateRunning);
-    m_->trade_queue_.Push(kMemTypeTradeOrderReq, string(reinterpret_cast<const char *>(req), sizeof(MemTradeOrderMessage)));
+    int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * req->items_size;
+    m_->trade_queue_.Push(kMemTypeTradeOrderReq, string(reinterpret_cast<const char *>(req), length));
     while (m_->async_state_.load() != kAsyncStateDone) {}
     if (!m_->async_result_.empty()) {
         (*error) = m_->async_result_;
@@ -313,7 +325,8 @@ void RiskMaster::HandleTradeWithdrawReq(MemTradeWithdrawMessage* req, std::strin
 }
 
 void RiskMaster::HandleTradeOrderRep(MemTradeOrderMessage* rep) {
-    m_->trade_queue_.Push(kMemTypeTradeOrderReq, string(reinterpret_cast<const char *>(rep), sizeof(MemTradeOrderMessage)));
+    int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * rep->items_size;
+    m_->trade_queue_.Push(kMemTypeTradeOrderRep, string(reinterpret_cast<const char *>(rep), length));
 }
 
 void RiskMaster::HandleTradeWithdrawRep(MemTradeWithdrawMessage* rep) {

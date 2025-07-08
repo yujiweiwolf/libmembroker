@@ -64,6 +64,10 @@ class MemBrokerOptions {
         return &flow_controls_;
     }
 
+    inline void set_request_timeout_ms(int64_t request_timeout_ms) {
+        request_timeout_ms_ = request_timeout_ms;
+    }
+
     inline int64_t request_timeout_ms() const {
         return request_timeout_ms_;
     }

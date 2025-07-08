@@ -2,6 +2,7 @@
 #pragma once
 #include "x/x.h"
 #include "coral/coral.h"
+namespace co {
 
 //  约定共享内存的大小
 constexpr int64_t kReqMemSize = 64;
@@ -17,18 +18,12 @@ constexpr int kMemTypeInnerCyclicSignal = 6400007;
 constexpr int kMemTypeHeartBeat = 6400008;
 constexpr int kMemTypeMonitorRisk = 6400009;
 
-namespace co {
 struct MemTradeAccount {
     char fund_id[kMemFundIdSize];
     int64_t timestamp = 0;
     char name[128];
     int64_t type = 0;
     int64_t batch_order_size = 0;
-//    bool disabled = false;
-//    bool enable_trader = false;
-//    bool enable_researcher = false;
-//    bool enable_risker = false;
-//    int64_t market;
 };
 
 struct MemGetTradeAssetMessage {

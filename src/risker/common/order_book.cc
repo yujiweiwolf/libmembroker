@@ -5,18 +5,47 @@
 namespace co {
 
 Order::Order()
-: create_time(x::Timestamp()),
+: create_time(x::UnixMilli()),
 timestamp(0),
 bs_flag(0),
 price(0),
 volume(0),
 match_volume(0),
-withdraw_failed_time(0) {
+withdraw_failed_time(0),
+finish_flag(false) {
 }
 
-bool Order::IsFinished(const int64_t& now) const {
-    return withdraw_succeed || match_volume >= volume ||
-    (now > 0 && withdraw_failed_time > 0 && now - withdraw_failed_time > kOrderTimeoutMS);
+bool Order::IsFinished() {
+    if (finish_flag) {
+        return finish_flag;
+    }
+    if (withdraw_succeed || match_volume >= volume) {
+        finish_flag = true;
+        return finish_flag;
+    }
+    int64_t now = x::UnixMilli();
+    // 等待委托响应超时
+    if (order_no.empty() && (now - create_time) > kOrderTimeoutMS) {
+        LOG_INFO << "委托响应超时, code: " << code
+           << ", message_id: " << message_id
+           << ", bs_flag: " << bs_flag
+           << ", price: " << price
+           << ", volume: " << volume;
+        finish_flag = true;
+        return finish_flag;
+    }
+    // 撤单失败超过设定阈值
+    if (order_no.length() > 0 && withdraw_failed_time > 0 && (now - withdraw_failed_time) > kOrderTimeoutMS) {
+        LOG_INFO << "撤单失败超过设定阈值, code: " << code
+                 << ", message_id: " << message_id
+                 << ", order_no: " << order_no
+                 << ", bs_flag: " << bs_flag
+                 << ", price: " << price
+                 << ", volume: " << volume;
+        finish_flag = true;
+        return finish_flag;
+    }
+    return finish_flag;
 }
 
 OrderBook::OrderBook(AntiSelfKnockRisker* risker): risker_(risker) {
@@ -25,8 +54,9 @@ OrderBook::OrderBook(AntiSelfKnockRisker* risker): risker_(risker) {
 
 std::string OrderBook::HandleTradeOrderReq(MemTradeOrder* order, int64_t bs_flag) {
     // 集合竞价期间，不处理
-    int64_t stamp = x::RawTime();
-    if (stamp < 93000000 || stamp >= 145700000) {
+    int64_t timestamp = x::RawDateTime();
+    int64_t stamp = timestamp % 1000000000LL;
+    if (stamp < 93000000 || (stamp >= 145700000 && stamp < 150100000)) {
         std::string code = order->code;
         LOG_INFO << "auction time, disregard order, code: " << code
                  << ", bs_flag: " << bs_flag
@@ -36,9 +66,9 @@ std::string OrderBook::HandleTradeOrderReq(MemTradeOrder* order, int64_t bs_flag
         return "";
     }
     TryHandleTick();
-    latest_order_timestamp_ = x::RawDateTime();
+    latest_order_timestamp_ = timestamp;
     int64_t order_price = EncodePrice(order->price);
-    int64_t now = x::Timestamp();
+
     if (bs_flag == kBsFlagBuy) {
         for (auto itr = asks_.begin(); itr != asks_.end();) {
             int64_t ask_price = itr->first;
@@ -46,17 +76,7 @@ std::string OrderBook::HandleTradeOrderReq(MemTradeOrder* order, int64_t bs_flag
                 break;
             }
             auto active_order = itr->second;
-            bool remove = false;
-            if (active_order->order_no.empty() && now - active_order->create_time > kOrderTimeoutMS) {
-                remove = true;  // 如果等待委托响应超时，则删除挂单
-            }
-            if (!remove) {
-                if (active_order->IsFinished() ||
-                (active_order->withdraw_failed_time > 0 &&
-                    now - active_order->withdraw_failed_time > kOrderTimeoutMS)) {
-                    remove = true;  // 如果已撤单成功，或者撤单失败超过设定阈值，则删除挂单
-                }
-            }
+            bool remove = active_order->IsFinished();
             if (remove) {
                 itr = asks_.erase(itr);
                 risker_->OnOrderFinish(active_order);
@@ -79,17 +99,7 @@ std::string OrderBook::HandleTradeOrderReq(MemTradeOrder* order, int64_t bs_flag
                 break;
             }
             auto active_order = itr->second;
-            bool remove = false;
-            if (active_order->order_no.empty() && now - active_order->create_time > kOrderTimeoutMS) {
-                remove = true;  // 如果等待委托响应超时，则删除挂单
-            }
-            if (!remove) {
-                if (active_order->IsFinished() ||
-                (active_order->withdraw_failed_time > 0 &&
-                now - active_order->withdraw_failed_time > kOrderTimeoutMS)) {
-                    remove = true;  // 如果已撤单成功，或者撤单失败超过设定阈值，则删除挂单
-                }
-            }
+            bool remove = active_order->IsFinished();
             if (remove) {
                 itr = bids_.erase(itr);
                 risker_->OnOrderFinish(active_order);
@@ -118,43 +128,70 @@ void OrderBook::OnTradeOrderReqPass(OrderPtr order) {
     }
 }
 
-OrderPtr OrderBook::HandleTradeOrderRep(const std::string& message_id,
-                                        const std::string& fund_id,
-                                        const std::string& batch_no,
-                                        int64_t bs_flag,
-                                        MemTradeOrder* order) {
+OrderPtr OrderBook::HandleTradeOrderRep(MemTradeOrderMessage* rep, MemTradeOrder* order) {
     OrderPtr ret = nullptr;
     int64_t order_price = EncodePrice(order->price);
     std::string order_no = order->order_no;
-    if (bs_flag == kBsFlagBuy) {
+    bool inner_flag = false;
+    if (rep->bs_flag == kBsFlagBuy) {
         auto range = bids_.equal_range(order_price);
         for (auto itr = range.first; itr != range.second; ++itr) {
             auto& active_order = itr->second;
-            if (active_order->message_id == message_id) {
+            if (active_order->message_id.compare(rep->id) == 0) {
+                inner_flag = true;
                 if (order_no.empty()) {
                     bids_.erase(itr);
                 } else {
-                    active_order->batch_no = batch_no;
+                    active_order->batch_no = rep->batch_no;
                     active_order->order_no = order_no;
                     ret = active_order;
                 }
                 break;
             }
         }
-    } else if (bs_flag == kBsFlagSell) {
+        // 其它帐号的单子，只有响应
+        if (!inner_flag && strlen(order->order_no) > 0) {
+            ret = std::make_shared<Order>();
+            ret->message_id = rep->id;
+            ret->timestamp = rep->timestamp;
+            ret->fund_id = rep->fund_id;
+            ret->code = order->code;
+            ret->bs_flag = rep->bs_flag;
+            ret->volume = order->volume;
+            ret->price = order->price;
+            ret->batch_no = rep->batch_no;
+            ret->order_no = order_no;
+            OnTradeOrderReqPass(ret);
+        }
+    } else if (rep->bs_flag == kBsFlagSell) {
         auto range = asks_.equal_range(order_price);
         for (auto itr = range.first; itr != range.second; ++itr) {
             auto& active_order = itr->second;
-            if (active_order->message_id == message_id) {
+            if (active_order->message_id.compare(rep->id) == 0) {
+                inner_flag = true;
                 if (order_no.empty()) {
                     asks_.erase(itr);
                 } else {
-                    active_order->batch_no = batch_no;
+                    active_order->batch_no = rep->batch_no;
                     active_order->order_no = order_no;
                     ret = active_order;
                 }
                 break;
             }
+        }
+        // 其它broker的单子，只有响应
+        if (!inner_flag && strlen(order->order_no) > 0) {
+            ret = std::make_shared<Order>();
+            ret->message_id = rep->id;
+            ret->timestamp = rep->timestamp;
+            ret->fund_id = rep->fund_id;
+            ret->code = order->code;
+            ret->bs_flag = rep->bs_flag;
+            ret->volume = order->volume;
+            ret->price = order->price;
+            ret->batch_no = rep->batch_no;
+            ret->order_no = order_no;
+            OnTradeOrderReqPass(ret);
         }
     }
     return ret;

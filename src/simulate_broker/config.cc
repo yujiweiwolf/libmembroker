@@ -92,6 +92,9 @@ namespace co {
                 std::shared_ptr<RiskOptions> opt = std::make_shared<RiskOptions>();
                 std::string fund_id = getStr(item, "fund_id");
                 std::string risker_id = getStr(item, "risker_id");
+                std::string name = getStr(item, "name");
+                std::string json = getStr(item, "data");
+
                 bool disabled = getBool(item, "disabled");
                 bool enable_prevent_self_knock = getBool(item, "enable_prevent_self_knock");
                 bool only_etf_anti_self_knock = getBool(item, "only_etf_anti_self_knock");
@@ -100,8 +103,16 @@ namespace co {
                 opt->set_disabled(disabled);
                 std::string data = "{\"enable_prevent_self_knock\":" + string(enable_prevent_self_knock ? "true" : "false") +
                         "," + "\"only_etf_anti_self_knock\":" + string(only_etf_anti_self_knock ? "true" : "false") +
-                        + "}";
+                        "," + "\"name\":" + "\"" +  name + "\""
+                        "," + json + "}";
                 opt->set_data(data);
+
+//                double cancel_ratio_threshold_ = opt->GetFloat64("withdraw_ratio");
+//                double knock_ratio_threshold_ = opt->GetFloat64("knock_ratio");
+//                double failure_ratio_threshold_ = opt->GetFloat64("failure_ratio");
+//                int64_t max_order_volume = opt->GetInt64("max_order_volume");
+//                double max_order_amount = opt->GetFloat64("max_order_amount");
+//                bool flag = opt->GetBool("enable_prevent_self_knock");
                 risk_opts_.push_back(opt);
             }
         }
@@ -132,6 +143,11 @@ namespace co {
             ss << "\", disabled: \"" << std::boolalpha << risk->disabled();
             ss << "\", enable_prevent_self_knock: \"" << std::boolalpha << risk->GetBool("enable_prevent_self_knock");
             ss << "\", only_etf_anti_self_knock: \"" << std::boolalpha << risk->GetBool("only_etf_anti_self_knock");
+            ss << "\", withdraw_ratio: \""  << risk->GetFloat64("withdraw_ratio");
+            ss << "\", knock_ratio: \""  << risk->GetFloat64("knock_ratio");
+            ss << "\", failure_ratio: \""  << risk->GetFloat64("failure_ratio");
+            ss << "\", max_order_volume: \""  << risk->GetInt64("max_order_volume");
+            ss << "\", max_order_amount: \""  << risk->GetFloat64("max_order_amount");
             ss << std::endl;
         }
         ss << "+-------------------- configuration end   --------------------+";

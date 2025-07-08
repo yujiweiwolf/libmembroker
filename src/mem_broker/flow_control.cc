@@ -206,7 +206,7 @@ namespace co {
             auto& raw = msg->data();
             MemTradeWithdrawMessage *rep = (MemTradeWithdrawMessage*)raw.data();
             strncpy(rep->error, error.c_str(), error.length());
-            msg->set_function_id(kMemTypeTradeOrderRep);
+            msg->set_function_id(kMemTypeTradeWithdrawRep);
             msg->set_data(string(reinterpret_cast<const char*>(rep), sizeof(MemTradeWithdrawMessage)));
         } else {
             throw std::runtime_error("[FAN-Broker-NeverHappenError]");
@@ -390,23 +390,23 @@ namespace co {
                 }
             }
         } else if (function_id == kMemTypeTradeWithdrawReq) {
-            auto& raw = msg->data();
-            auto req = flatbuffers::GetRoot<co::fbs::TradeWithdrawMessage>(raw.data());
+            auto raw = msg->data();
+            MemTradeWithdrawMessage *req = reinterpret_cast<MemTradeWithdrawMessage*>(raw.data());
             int64_t market = 0;
             int64_t batch_size = 0;
-            if (req->order_no() && req->order_no()->size() > 0) {
-                ParseStandardOrderNo(req->order_no()->string_view(), &market);
+            if (req->order_no[0] != '\0') {
+                ParseStandardOrderNo(req->order_no, &market);
                 batch_size = 1;
-            } else if (req->batch_no() && req->batch_no()->size() > 0) {
-                ParseStandardBatchNo(req->batch_no()->string_view(), &market, &batch_size);
+            } else if (req->batch_no[0] != '\0') {
+                ParseStandardBatchNo(req->batch_no, &market, &batch_size);
             }
             if (market <= 0) {  // 解析委托合同号/批次号失败
                 std::stringstream ss;
                 ss << "[FAN-Broker-FlowControlError] non-standard ";
-                if (req->order_no() && req->order_no()->size() > 0) {
-                    ss << "order_no is forbidden: " << (req->order_no() ? req->order_no()->str() : "");
+                if (req->order_no[0] != '\0') {
+                    ss << "order_no is forbidden: " << req->order_no;
                 } else {
-                    ss << "batch_no is forbidden: " << (req->batch_no() ? req->batch_no()->str() : "");
+                    ss << "batch_no is forbidden: " << req->batch_no;
                 }
                 std::string error = ss.str();
                 msg = FlowControlMarketQueue::CreateErrorRep(msg, error);
