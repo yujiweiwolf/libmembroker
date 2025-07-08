@@ -114,9 +114,10 @@ void RiskMaster::RiskMasterImpl::Run() {
         string feeder_dir = getStr(risk, "feeder_dir");
         x::MMapReader reader;
         // 本帐号，事前风控; 其它帐号，事后风控
-        reader.Open(mem_dir, mem_rep_file, false);
+        reader.Open(mem_dir, mem_rep_file, true);
         reader.Open(feeder_dir, "data", true);
         LOG_INFO << "[risk][master] load configuration ok";
+        string broker_fund;
         std::string raw;
         int64_t type = 0;
         const void* data = nullptr;
@@ -130,6 +131,9 @@ void RiskMaster::RiskMasterImpl::Run() {
                     case kMemTypeTradeOrderReq: {
                         MemTradeOrderMessage *req = reinterpret_cast<MemTradeOrderMessage*>(raw.data());
                         std::string fund_id = req->fund_id;
+                        if (broker_fund.empty()) {
+                            broker_fund = fund_id;
+                        }
                         std::string error;
                         auto riskers = GetRiskers(fund_id);
                         if (riskers) {
@@ -222,49 +226,58 @@ void RiskMaster::RiskMasterImpl::Run() {
                     }
                 }
             }
-//            while (true) {
-//                int32_t type = reader.Next(&data);
-//                switch (type) {
-//                    case kMemTypeQTickBody : {
-//                        MemQTickBody *tick = (MemQTickBody *) data;
-//                        anti_risker_.OnTick(tick);
-//                        break;
-//                    }
-//                    case kMemTypeTradeOrderRep: {
-//                        MemTradeOrderMessage *rep = reinterpret_cast<MemTradeOrderMessage*>(raw.data());
-//                        auto riskers = GetRiskers(rep->fund_id);
-//                        if (riskers) {
-//                            for (auto& risker : *riskers) {
-//                                risker->HandleTradeOrderReq(rep);
-//                            }
-//                        }
-//                        break;
-//                    }
-//                    case kMemTypeTradeWithdrawRep: {
-//                        MemTradeWithdrawMessage *rep = reinterpret_cast<MemTradeWithdrawMessage*>(raw.data());
-//                        auto riskers = GetRiskers(rep->fund_id);
-//                        if (riskers) {
-//                            for (auto& risker : *riskers) {
-//                                risker->HandleTradeWithdrawRep(rep);
-//                            }
-//                        }
-//                        break;
-//                    }
-//                    case kMemTypeTradeKnock: {
-//                        MemTradeKnock *knock = reinterpret_cast<MemTradeKnock*>(raw.data());
-//                        auto riskers = GetRiskers(knock->fund_id);
-//                        if (riskers) {
-//                            for (auto& risker : *riskers) {
-//                                risker->OnTradeKnock(knock);
-//                            }
-//                        }
-//                        break;
-//                    }
-//                    default: {
-//                        break;
-//                    }
-//                }
-//            }
+            while (true) {
+                int32_t type = reader.Next(&data);
+                switch (type) {
+                    case kMemTypeQTickBody : {
+                        MemQTickBody *tick = (MemQTickBody *) data;
+                        anti_risker_.OnTick(tick);
+                        break;
+                    }
+                    case kMemTypeTradeOrderRep: {
+                        MemTradeOrderMessage *rep = reinterpret_cast<MemTradeOrderMessage*>(raw.data());
+                        if (broker_fund.compare(rep->fund_id) != 0) {
+                            auto riskers = GetRiskers(rep->fund_id);
+                            if (riskers) {
+                                for (auto& risker : *riskers) {
+                                    risker->HandleTradeOrderReq(rep);
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    case kMemTypeTradeWithdrawRep: {
+                        MemTradeWithdrawMessage *rep = reinterpret_cast<MemTradeWithdrawMessage*>(raw.data());
+                        if (broker_fund.compare(rep->fund_id) != 0) {
+                            auto riskers = GetRiskers(rep->fund_id);
+                            if (riskers) {
+                                for (auto &risker: *riskers) {
+                                    risker->HandleTradeWithdrawRep(rep);
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    case kMemTypeTradeKnock: {
+                        MemTradeKnock *knock = reinterpret_cast<MemTradeKnock*>(raw.data());
+                        if (broker_fund.compare(knock->fund_id) != 0) {
+                            auto riskers = GetRiskers(knock->fund_id);
+                            if (riskers) {
+                                for (auto &risker: *riskers) {
+                                    risker->OnTradeKnock(knock);
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    default: {
+                        break;
+                    }
+                }
+                if (type == 0) {
+                    break;
+                }
+            }
         }
     } catch (std::exception& e) {
         LOG_ERROR << "[risk][master] risk master is crashed: " << e.what();

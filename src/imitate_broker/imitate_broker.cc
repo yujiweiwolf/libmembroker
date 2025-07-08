@@ -1,5 +1,5 @@
 // Copyright 2021 Fancapital Inc.  All rights reserved.
-#include "test_broker.h"
+#include "imitate_broker.h"
 #include "config.h"
 
 namespace co {
@@ -77,22 +77,21 @@ namespace co {
         memcpy(buffer, req, length);
         MemTradeOrderMessage* rep = (MemTradeOrderMessage*)buffer;
         if (rep->items_size > 1) {
-            string batch_no = "batch_no_" + std::to_string(batch_no_index_++);
+            string batch_no = "1-" + std::to_string(rep->items_size) + std::to_string(batch_no_index_++);
             strncpy(rep->batch_no, batch_no.c_str(), batch_no.length());
         }
         auto items = (MemTradeOrder*)((char*)rep + sizeof(MemTradeOrderMessage));
         for (int i = 0; i < rep->items_size; i++) {
             MemTradeOrder* order = items + i;
-            string order_no = "order_no_" + std::to_string(order_no_index_++);
+            string order_no = "1-" + std::to_string(order_no_index_++);
             strcpy(order->order_no, order_no.c_str());
         }
-        // rep->rep_time = x::RawDateTime();
         SendRtnMessage(string(buffer, length), kMemTypeTradeOrderRep);
         {
             for (int i = 0; i < rep->items_size; i++) {
                 MemTradeOrder* order = items + i;
                 int length = sizeof(MemTradeKnock);
-                char buffer[length] = "";
+                char buffer[sizeof(MemTradeKnock)] = "";
                 MemTradeKnock* knock = (MemTradeKnock*) buffer;
                 knock->timestamp = x::RawDateTime();
                 strcpy(knock->fund_id, rep->fund_id);
@@ -102,18 +101,23 @@ namespace co {
                 knock->bs_flag = rep->bs_flag;
                 knock->match_volume = order->volume;
                 int index = (order->volume / 100) % 3;
-                if (index == 0) {
+                if (index == 1) {
                     knock->match_type = 1;
                     knock->match_price = order->price;
                     knock->match_amount = order->price * order->volume * 100;
                     string match_no = "match_no" + std::to_string(order_no_index_++);
                     strcpy(knock->match_no, match_no.c_str());
-                } else if (index == 1) {
-                    knock->match_type = 2;
-                    knock->match_price = 0;
-                    knock->match_amount = 0;
-                    string match_no = "_" + string(knock->order_no);
-                    strcpy(knock->match_no, match_no.c_str());
+                } else if (index == 2) {
+//                    knock->match_type = 2;
+//                    knock->match_price = 0;
+//                    knock->match_amount = 0;
+//                    string match_no = "_" + string(knock->order_no);
+//                    strcpy(knock->match_no, match_no.c_str());
+                    MemTradeOrder tmp = {};
+                    memcpy(&tmp, order, sizeof(tmp));
+                    int64_t bs_flag = req->bs_flag;
+                    all_order_.insert(std::make_pair(order->order_no, std::make_pair(bs_flag, tmp)));
+                    continue;
                 } else {
                     knock->match_type = 3;
                     knock->match_price = 0;
@@ -150,16 +154,17 @@ namespace co {
             strcpy(rep->error, "撤单错误，报单已成交");
         }
         SendRtnMessage(string(buffer, length), kMemTypeTradeWithdrawRep);
-        if (rep_time % 2 != 0) {
+        if (auto it = all_order_.find(req->order_no); it != all_order_.end()) {
             int length = sizeof(MemTradeKnock);
             char buffer[length] = "";
             MemTradeKnock* knock = (MemTradeKnock*) buffer;
             knock->timestamp = x::RawDateTime();
             strcpy(knock->fund_id, rep->fund_id);
-            strcpy(knock->code, "600000.SH");
+            strcpy(knock->code, it->second.second.code);
             strcpy(knock->order_no, rep->order_no);
-            knock->bs_flag = 1;
-            knock->match_volume = 100;
+            knock->bs_flag = it->second.first;
+            knock->market = it->second.second.market;
+            knock->match_volume = it->second.second.volume;
             knock->match_type = co::kMatchTypeWithdrawOK;
             knock->match_price = 0;
             knock->match_amount = 0;
@@ -280,6 +285,7 @@ namespace co {
                     }
                 }
                 delete item.second;
+                item.second = nullptr;
                 all_req_.erase(it);
                 break;
             }

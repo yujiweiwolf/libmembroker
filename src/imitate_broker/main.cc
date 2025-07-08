@@ -1,6 +1,7 @@
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
-#include "test_broker.h"
+#include <regex>
+#include "imitate_broker.h"
 #include "config.h"
 
 using namespace std;
@@ -13,29 +14,63 @@ string mem_dir;
 string mem_req_file;
 string mem_rep_file;
 
+// BUY 018020.SH 30000 101.9
+// BUY 600000.SH 100 9.9
+// BUY 159920.SZ 1000 1.119
+// SELL 159920.SZ 500 1.100
+// BUY 510900.SH 1000 0.800
+// SELL 510900.SH 100 0.767
+
 void order(shared_ptr<MemBroker> broker) {
-    for (int index = 0; index < NUM_ORDER; index++) {
-        int total_order_num = 1;
-        string id = x::UUID();
-        int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * total_order_num;
-        char buffer[length] = {};
-        MemTradeOrderMessage* msg = (MemTradeOrderMessage*) buffer;
-        strncpy(msg->id, id.c_str(), id.length());
-        strcpy(msg->fund_id, fund_id);
-        msg->bs_flag = kBsFlagBuy;
-        msg->items_size = total_order_num;
-        MemTradeOrder* item = (MemTradeOrder*)((char*)buffer + sizeof(MemTradeOrderMessage));
-        for (int i = 0; i < total_order_num; i++) {
-            MemTradeOrder* order = item + i;
-            order->volume = 100 * ( index + 1);
-            order->price = 10.01 + 0.01 * i;
-            order->price_type = kQOrderTypeLimit;
-            sprintf(order->code, "00000%d.SZ", index + 1);
-            LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
+    int total_order_num = 1;
+    int64_t bs_flag = 0;
+    string id = x::UUID();
+    int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * total_order_num;
+    char buffer[length] = {};
+    MemTradeOrderMessage* msg = (MemTradeOrderMessage*) buffer;
+    strncpy(msg->id, id.c_str(), id.length());
+    strcpy(msg->fund_id, fund_id);
+    msg->items_size = total_order_num;
+    MemTradeOrder* item = (MemTradeOrder*)((char*)buffer + sizeof(MemTradeOrderMessage));
+    for (int i = 0; i < total_order_num; i++) {
+        MemTradeOrder* order = item + i;
+        getchar();
+        cout << "please input : BUY 600000.SH 100 9.9\n";
+        std::string input;
+        getline(std::cin, input);
+        std::cout << "your input is: # " << input << " #" << std::endl;
+        std::smatch result;
+        if (regex_match(input, result, std::regex("^(BUY|SELL|CREATE|REDEEM) ([0-9]{1,10})\.(SH|SZ) ([0-9]{1,10}) ([.0-9]{1,10})$")))
+        {
+            string command = result[1].str();
+            string instrument = result[2].str();
+            string market = result[3].str();
+            string volume = result[4].str();
+            string price = result[5].str();
+            if (command == "BUY") {
+                bs_flag = kBsFlagBuy;
+            } else if (command == "SELL") {
+                bs_flag = kBsFlagSell;
+            }
+
+            string code;
+            if (market == "SH") {
+                order->market = kMarketSH;
+                code = instrument + ".SH";
+            } else if (market == "SZ") {
+                order->market = kMarketSZ;
+                code = instrument + ".SZ";
+            }
+            strcpy(order->code, code.c_str());
+            order->volume = atoll(volume.c_str());
+            order->price = atof(price.c_str());
         }
-        msg->timestamp = x::RawDateTime();
-        broker->SendTradeOrder(msg);
+        order->price_type = kQOrderTypeLimit;
+        LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
     }
+    msg->bs_flag = bs_flag;
+    msg->timestamp = x::RawDateTime();
+    broker->SendTradeOrder(msg);
 }
 
 void withdraw(shared_ptr<MemBroker> broker) {
@@ -150,6 +185,13 @@ void ReadRep() {
 }
 
 int main(int argc, char* argv[]) {
+//    string order_no = "1-151824089";
+//    std::smatch result;
+//    bool flag = regex_match(order_no, result, std::regex("^(1|2)-([0-9a-zA-Z]{1,100})$"));
+//    if (!flag) {
+//        return 1;
+//    }
+
     try {
         MemBrokerOptionsPtr options = Config::Instance()->options();
         const std::vector<std::shared_ptr<RiskOptions>>& risk_opts = Config::Instance()->risk_opt();
@@ -165,8 +207,8 @@ int main(int argc, char* argv[]) {
         string usage("\nTYPE  'q' to quit program\n");
         usage += "      '1' to order_sh\n";
         usage += "      '2' to order_sz\n";
-        usage += "      '3' to withdraw sh\n";
-        usage += "      '4' to withdraw sz\n";
+        usage += "      '3' to withdraw\n";
+        usage += "      '4' to order\n";
         usage += "      '5' to query asset\n";
         usage += "      '6' to query position\n";
         usage += "      '7' to query order\n";
@@ -192,6 +234,7 @@ int main(int argc, char* argv[]) {
                 }
                 case '4':
                 {
+                    order(broker);
                     break;
                 }
                 case '5':

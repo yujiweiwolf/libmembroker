@@ -4,6 +4,7 @@
 #include <string>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
+#include <regex>
 #include "x/x.h"
 #include "coral/coral.h"
 #include "../mem_broker/mem_base_broker.h"
@@ -19,41 +20,32 @@ const char mem_dir[] = "../data";
 const char mem_req_file[] = "broker_req";
 const char mem_rep_file[] = "broker_rep";
 
-
-void write_order(x::MMapWriter* writer) {
-    for (int index = 0; index < NUM_ORDER; index++) {
-        int total_order_num = 3;
-        string id = x::UUID();
-        void* buffer = writer->OpenFrame(sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * total_order_num);
-        MemTradeOrderMessage* msg = (MemTradeOrderMessage*) buffer;
-        strncpy(msg->id, id.c_str(), id.length());
-        strcpy(msg->fund_id, fund_id);
-        msg->bs_flag = kBsFlagBuy;
-        msg->items_size = total_order_num;
-        MemTradeOrder* item = (MemTradeOrder*)((char*)buffer + sizeof(MemTradeOrderMessage));
-        for (int i = 0; i < total_order_num; i++) {
-            MemTradeOrder* order = item + i;
-            order->volume = 100 * ( index + 1);
-            order->price = 10.01 + 0.01 * i;
-            order->price_type = kQOrderTypeLimit;
-            sprintf(order->code, "00000%d.SZ", index + 1);
-            LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
-        }
-        //  解析委托列表柔性数组
-        {
-            MemTradeOrderMessage* msg = (MemTradeOrderMessage*) buffer;
-            MemTradeOrder* items = msg->items;
-            for (int i = 0; i < msg->items_size; i++) {
-                MemTradeOrder* order = items + i;
-                LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
-            }
-        }
-        msg->timestamp = x::RawDateTime();
-        writer->CloseFrame(kMemTypeTradeOrderReq);
+void order_sh(x::MMapWriter* writer) {
+    int total_order_num = 1;
+    string id = x::UUID();
+    void* buffer = writer->OpenFrame(sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * total_order_num);
+    MemTradeOrderMessage* msg = (MemTradeOrderMessage*) buffer;
+    strncpy(msg->id, id.c_str(), id.length());
+    strcpy(msg->fund_id, fund_id);
+    msg->items_size = total_order_num;
+    msg->bs_flag = co::kBsFlagBuy;
+    MemTradeOrder* item = (MemTradeOrder*)((char*)buffer + sizeof(MemTradeOrderMessage));
+    for (int i = 0; i < total_order_num; i++) {
+        MemTradeOrder* order = item + i;
+        strcpy(order->code, "600000.SH");
+        order->volume = 100;
+        order->price = 9.99;
+        string volume;
+        cout << "please input volume" << endl;
+        cin >> volume;
+        order->volume = atoll(volume.c_str());
+        LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
     }
+    msg->timestamp = x::RawDateTime();
+    writer->CloseFrame(kMemTypeTradeOrderReq);
 }
 
-void write_withdraw(x::MMapWriter* writer) {
+void withdraw(x::MMapWriter* writer) {
     string id = x::UUID();
     void* buffer = writer->OpenFrame(sizeof(MemTradeWithdrawMessage));
     MemTradeWithdrawMessage* msg = (MemTradeWithdrawMessage*) buffer;
@@ -66,35 +58,54 @@ void write_withdraw(x::MMapWriter* writer) {
     writer->CloseFrame(kMemTypeTradeWithdrawReq);
 }
 
-void query_asset(x::MMapWriter* writer) {
+void order(x::MMapWriter* writer) {
+    int total_order_num = 1;
+    int64_t bs_flag = 0;
     string id = x::UUID();
-    void* buffer = writer->OpenFrame(sizeof(MemGetTradeAssetMessage));
-    MemGetTradeAssetMessage* msg = (MemGetTradeAssetMessage*) buffer;
+    void* buffer = writer->OpenFrame(sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * total_order_num);
+    MemTradeOrderMessage* msg = (MemTradeOrderMessage*) buffer;
     strncpy(msg->id, id.c_str(), id.length());
     strcpy(msg->fund_id, fund_id);
-    msg->timestamp = x::RawDateTime();
-    writer->CloseFrame(kMemTypeQueryTradeAssetReq);
-}
+    msg->items_size = total_order_num;
+    MemTradeOrder* item = (MemTradeOrder*)((char*)buffer + sizeof(MemTradeOrderMessage));
+    for (int i = 0; i < total_order_num; i++) {
+        MemTradeOrder* order = item + i;
+        getchar();
+        cout << "please input : BUY 600000.SH 100 9.9\n";
+        std::string input;
+        getline(std::cin, input);
+        std::cout << "your input is: # " << input << " #" << std::endl;
+        std::smatch result;
+        if (regex_match(input, result, std::regex("^(BUY|SELL|CREATE|REDEEM) ([0-9]{1,10})\.(SH|SZ) ([0-9]{1,10}) ([.0-9]{1,10})$")))
+        {
+            string command = result[1].str();
+            string instrument = result[2].str();
+            string market = result[3].str();
+            string volume = result[4].str();
+            string price = result[5].str();
+            if (command == "BUY") {
+                bs_flag = kBsFlagBuy;
+            } else if (command == "SELL") {
+                bs_flag = kBsFlagSell;
+            }
 
-void query_position(x::MMapWriter* writer) {
-    string id = x::UUID();
-    void* buffer = writer->OpenFrame(sizeof(MemGetTradePositionMessage));
-    MemGetTradePositionMessage* msg = (MemGetTradePositionMessage*) buffer;
-    strncpy(msg->id, id.c_str(), id.length());
-    strcpy(msg->fund_id, fund_id);
+            string code;
+            if (market == "SH") {
+                order->market = kMarketSH;
+                code = instrument + ".SH";
+            } else if (market == "SZ") {
+                order->market = kMarketSZ;
+                code = instrument + ".SZ";
+            }
+            strcpy(order->code, code.c_str());
+            order->volume = atoll(volume.c_str());
+            order->price = atof(price.c_str());
+        }
+        LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
+    }
+    msg->bs_flag = bs_flag;
     msg->timestamp = x::RawDateTime();
-    writer->CloseFrame(kMemTypeQueryTradePositionReq);
-
-}
-
-void query_knock(x::MMapWriter* writer) {
-    string id = x::UUID();
-    void* buffer = writer->OpenFrame(sizeof(MemGetTradeKnockMessage));
-    MemGetTradeKnockMessage* msg = (MemGetTradeKnockMessage*) buffer;
-    strncpy(msg->id, id.c_str(), id.length());
-    strcpy(msg->fund_id, fund_id);
-    msg->timestamp = x::RawDateTime();
-    writer->CloseFrame(kMemTypeQueryTradeKnockReq);
+    writer->CloseFrame(kMemTypeTradeOrderReq);
 }
 
 void ReadRep() {
@@ -112,15 +123,15 @@ void ReadRep() {
         }
         if (!exit_flag) {
             x::MMapWriter req_writer;
-            req_writer.Open(mem_dir, mem_rep_file, kReqMemSize << 20, true);
+            req_writer.Open(mem_dir, mem_rep_file, kReqMemSize << 20, 0, true);
         }
     }
     const void* data = nullptr;
-    x::MMapReader common_reader;
-    common_reader.Open(mem_dir, mem_rep_file, true);
+    x::MMapReader reader;
+    reader.Open(mem_dir, mem_rep_file, true);
     while (true) {
-        x::Sleep(1000);
-        int32_t type = common_reader.Next(&data);
+        x::Sleep(100);
+        int32_t type = reader.Next(&data);
         if (type == kMemTypeTradeOrderRep) {
             MemTradeOrderMessage* rep = (MemTradeOrderMessage*)data;
             LOG_INFO << "收到报单响应, " << ToString(rep);
@@ -167,14 +178,13 @@ int main(int argc, char* argv[]) {
     try {
         std::thread t1(ReadRep);
         x::MMapWriter req_writer;
-        req_writer.Open(mem_dir, mem_req_file, kReqMemSize << 20, true);
+        req_writer.Open(mem_dir, mem_req_file, kReqMemSize << 20, 0, true);
 
-//        x::MMapWriter inner_writer;
-//        inner_writer.Open("../data", kInnerBrokerFile, kInnerBrokerMemSize << 20, true);
         string usage("\nTYPE  'q' to quit program\n");
         usage += "      '1' to order_sh\n";
         usage += "      '2' to order_sz\n";
-        usage += "      '3' to withdraw_sh\n";
+        usage += "      '3' to withdraw\n";
+        usage += "      '4' to order\n";
         cerr << (usage);
 
         char c;
@@ -182,39 +192,17 @@ int main(int argc, char* argv[]) {
             switch (c) {
             case '1':
             {
-                write_order(&req_writer);
-                break;
-            }
-            case '2':
-            {
+                order_sh(&req_writer);
                 break;
             }
             case '3':
             {
-                write_withdraw(&req_writer);
+                withdraw(&req_writer);
                 break;
             }
             case '4':
             {
-                break;
-            }
-            case '5':
-            {
-                // query_asset(&inner_writer);
-                break;
-            }
-            case '6':
-            {
-                // query_position(&inner_writer);
-                break;
-            }
-            case '7':
-            {
-                break;
-            }
-            case '8':
-            {
-                // query_knock(&inner_writer);
+                order(&req_writer);
                 break;
             }
             default:
