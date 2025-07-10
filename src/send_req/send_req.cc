@@ -1,24 +1,19 @@
-#include <iostream>
-#include <stdexcept>
-#include <sstream>
-#include <string>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <regex>
 #include "x/x.h"
 #include "coral/coral.h"
 #include "../mem_broker/mem_base_broker.h"
-#include "../mem_broker/mem_server.h"
 
-using namespace std;
 using namespace co;
 namespace po = boost::program_options;
-#define NUM_ORDER 10
 
 const char fund_id[] = "S1";
 const char mem_dir[] = "../data";
 const char mem_req_file[] = "broker_req";
 const char mem_rep_file[] = "broker_rep";
+
+// 100 全部成交; 200 废单; 300 部分成交; 其它 不成交
 
 void order_sh(x::MMapWriter* writer) {
     int total_order_num = 1;
@@ -29,9 +24,8 @@ void order_sh(x::MMapWriter* writer) {
     strcpy(msg->fund_id, fund_id);
     msg->items_size = total_order_num;
     msg->bs_flag = co::kBsFlagBuy;
-    MemTradeOrder* item = (MemTradeOrder*)((char*)buffer + sizeof(MemTradeOrderMessage));
     for (int i = 0; i < total_order_num; i++) {
-        MemTradeOrder* order = item + i;
+        MemTradeOrder* order = msg->items + i;
         strcpy(order->code, "600000.SH");
         order->volume = 100;
         order->price = 9.99;
@@ -54,6 +48,11 @@ void withdraw(x::MMapWriter* writer) {
     cout << "please input order_no" << endl;
     cin >> msg->order_no;
     LOG_INFO << "send withdraw, fund_id: " << msg->fund_id << ", order_no: " << msg->order_no;
+    if (msg->order_no[0] == '1') {
+        msg->market = co::kMarketSH;
+    } else if (msg->order_no[0] == '2') {
+        msg->market = co::kMarketSZ;
+    }
     msg->timestamp = x::RawDateTime();
     writer->CloseFrame(kMemTypeTradeWithdrawReq);
 }
@@ -106,6 +105,67 @@ void order(x::MMapWriter* writer) {
     msg->bs_flag = bs_flag;
     msg->timestamp = x::RawDateTime();
     writer->CloseFrame(kMemTypeTradeOrderReq);
+}
+
+void batch_order(x::MMapWriter* writer) {
+    int total_order_num = 4;
+    string id = x::UUID();
+    void* buffer = writer->OpenFrame(sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * total_order_num);
+    MemTradeOrderMessage* msg = (MemTradeOrderMessage*) buffer;
+    strncpy(msg->id, id.c_str(), id.length());
+    strcpy(msg->fund_id, fund_id);
+    msg->bs_flag = kBsFlagBuy;
+    msg->items_size = total_order_num;
+    // MemTradeOrder* item = (MemTradeOrder*)((char*)buffer + sizeof(MemTradeOrderMessage));
+    {
+        MemTradeOrder* order = msg->items + 0;
+        order->volume = 100;
+        order->price = 14.01;
+        strcpy(order->code, "600000.SH");
+        LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
+    }
+    {
+        MemTradeOrder* order = msg->items + 1;
+        order->volume = 200;
+        order->price = 26.01;
+        strcpy(order->code, "600030.SH");
+        LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
+    }
+    {
+        MemTradeOrder* order = msg->items + 2;
+        order->volume = 300;
+        order->price = 8.01;
+        strcpy(order->code, "600050.SH");
+        LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
+    }
+
+    {
+        MemTradeOrder* order = msg->items + 3;
+        order->volume = 400;
+        order->price = 5.76;
+        strcpy(order->code, "601985.SH");
+        LOG_INFO << "send order, code: " << order->code << ", volume: " << order->volume << ", price: " << order->price;
+    }
+    msg->timestamp = x::RawDateTime();
+    writer->CloseFrame(kMemTypeTradeOrderReq);
+}
+
+void batch_withdraw(x::MMapWriter* writer) {
+    string id = x::UUID();
+    void* buffer = writer->OpenFrame(sizeof(MemTradeWithdrawMessage));
+    MemTradeWithdrawMessage* msg = (MemTradeWithdrawMessage*) buffer;
+    strncpy(msg->id, id.c_str(), id.length());
+    strcpy(msg->fund_id, fund_id);
+    cout << "please input batch_no" << endl;
+    cin >> msg->batch_no;
+    LOG_INFO << "send withdraw, fund_id: " << msg->fund_id << ", batch_no: " << msg->batch_no;
+    if (msg->order_no[0] == '1') {
+        msg->market = co::kMarketSH;
+    } else if (msg->order_no[0] == '2') {
+        msg->market = co::kMarketSZ;
+    }
+    msg->timestamp = x::RawDateTime();
+    writer->CloseFrame(kMemTypeTradeWithdrawReq);
 }
 
 void ReadRep() {
@@ -185,6 +245,9 @@ int main(int argc, char* argv[]) {
         usage += "      '2' to order_sz\n";
         usage += "      '3' to withdraw\n";
         usage += "      '4' to order\n";
+
+        usage += "      'c' to batch_order\n";
+        usage += "      'd' to batch_withdraw\n";
         cerr << (usage);
 
         char c;
@@ -203,6 +266,16 @@ int main(int argc, char* argv[]) {
             case '4':
             {
                 order(&req_writer);
+                break;
+            }
+            case 'c':
+            {
+                batch_order(&req_writer);
+                break;
+            }
+            case 'd':
+            {
+                batch_withdraw(&req_writer);
                 break;
             }
             default:

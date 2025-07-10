@@ -201,7 +201,11 @@ namespace co {
             if (strlen(order->code) == 0) {
                 return "code is required";
             }
-            int64_t market = co::CodeToMarket(order->code);
+            int64_t market = order->market;
+            if (market <= 0) {
+                market = co::CodeToMarket(order->code);
+                order->market = market;
+            }
             if (market <= 0) {
                 std::stringstream ss;
                 return ("unknown market suffix in code: " + string(order->code));
@@ -248,6 +252,11 @@ namespace co {
         }
         if (trade_type == kTradeTypeSpot) {
             if (strlen(req->order_no)) {
+                if (req->order_no[0] == '1') {
+                    req->market = co::kMarketSH;
+                } else if (req->order_no[0] == '2') {
+                    req->market = co::kMarketSZ;
+                }
                 string order_no = req->order_no;
                 std::smatch result;
                 bool flag = regex_match(order_no, result, std::regex("^(1|2|3|9)-(.*)"));
@@ -255,13 +264,17 @@ namespace co {
                     return ("not valid order_no: " + order_no);
                 }
                 return "";
-            }
-            if (strlen(req->batch_no)) {
+            } else if (strlen(req->batch_no)) {
+                if (req->batch_no[0] == '1') {
+                    req->market = co::kMarketSH;
+                } else if (req->batch_no[0] == '2') {
+                    req->market = co::kMarketSZ;
+                }
                 string batch_no = req->batch_no;
                 std::smatch result;
                 bool flag = regex_match(batch_no, result, std::regex("^(1|2|3|9)-([0-9]{1,3})-(.*)"));
                 if (!flag) {
-                    return ("not valid order_no: " + batch_no);
+                    return ("not valid batch_no: " + batch_no);
                 }
             }
         }

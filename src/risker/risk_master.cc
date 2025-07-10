@@ -58,12 +58,9 @@ void RiskMaster::RiskMasterImpl::Init(const std::vector<std::shared_ptr<RiskOpti
         if (opt->disabled()) {
             continue;
         }
-        std:string fund_id = opt->fund_id();
+        std::string fund_id = opt->fund_id();
         std::string risker_id = opt->risker_id();
 
-        // ---------------------------------------------------
-        // 创建账户风控
-        // ---------------------------------------------------
         Risker* account_risker = nullptr;
         if (risker_id == kRiskerFancapital) {
             account_risker = new FancapitalRisker();
@@ -77,10 +74,7 @@ void RiskMaster::RiskMasterImpl::Init(const std::vector<std::shared_ptr<RiskOpti
             riskers->push_back(account_risker);
         }
 
-        // ---------------------------------------------------
-        // 创建公共风控
-        // ---------------------------------------------------
-        // 防对敲
+        // 所有帐号共用防对敲
         bool enable_prevent_self_knock = opt->GetBool("enable_prevent_self_knock");
         if (enable_prevent_self_knock) {
             anti_risker_.AddOption(opt);
@@ -113,9 +107,10 @@ void RiskMaster::RiskMasterImpl::Run() {
         auto risk = root["risk"];
         string feeder_dir = getStr(risk, "feeder_dir");
         x::MMapReader reader;
-        // 本帐号，事前风控; 其它帐号，事后风控
+        // broker内，事前风控; 其它broker，事后风控
         reader.Open(mem_dir, mem_rep_file, true);
-        reader.Open(feeder_dir, "data", true);
+        // 机器上的broker多，暂时不加载行情
+        // reader.Open(feeder_dir, "data", true);
         LOG_INFO << "[risk][master] load configuration ok";
         string broker_fund;
         std::string raw;
@@ -229,11 +224,11 @@ void RiskMaster::RiskMasterImpl::Run() {
             while (true) {
                 int32_t type = reader.Next(&data);
                 switch (type) {
-                    case kMemTypeQTickBody : {
-                        MemQTickBody *tick = (MemQTickBody *) data;
-                        anti_risker_.OnTick(tick);
-                        break;
-                    }
+//                    case kMemTypeQTickBody : {
+//                        MemQTickBody *tick = (MemQTickBody *) data;
+//                        anti_risker_.OnTick(tick);
+//                        break;
+//                    }
                     case kMemTypeTradeOrderRep: {
                         MemTradeOrderMessage *rep = reinterpret_cast<MemTradeOrderMessage*>(raw.data());
                         if (broker_fund.compare(rep->fund_id) != 0) {

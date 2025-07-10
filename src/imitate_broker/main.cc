@@ -137,11 +137,11 @@ void ReadRep() {
         }
     }
     const void* data = nullptr;
-    x::MMapReader common_reader;
-    common_reader.Open(mem_dir, mem_rep_file, true);
+    x::MMapReader reader;
+    reader.Open(mem_dir, mem_rep_file, true);
     while (true) {
         x::Sleep(1000);
-        int32_t type = common_reader.Next(&data);
+        int32_t type = reader.Next(&data);
         if (type == kMemTypeTradeOrderRep) {
             MemTradeOrderMessage* rep = (MemTradeOrderMessage*)data;
             LOG_INFO << "收到报单响应, " << ToString(rep);

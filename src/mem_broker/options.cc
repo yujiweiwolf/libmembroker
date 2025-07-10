@@ -104,6 +104,7 @@ namespace co {
                 }
             }
         }
+        opt->batch_order_size_ = getInt(broker, "batch_order_size");
         opt->enable_stock_short_selling_ = getBool(broker, "enable_stock_short_selling");
         opt->enable_query_only_ = getBool(broker, "enable_query_only");
         opt->query_asset_interval_ms_ = getInt(broker, "query_asset_interval_ms");
@@ -138,13 +139,14 @@ namespace co {
                 ss << "    - " << cfg->ToString() << std::endl;
             }
         }
-        ss << "  enable_stock_short_selling: " << (enable_stock_short_selling_ ? "true" : "false") << std::endl
-            << "  idle_sleep_ns: " << idle_sleep_ns_ << "ns" << std::endl
-            << "  cpu_affinity: " << cpu_affinity_ << std::endl
-            << "  mem_dir: " << mem_dir_ << std::endl
-            << "  mem_req_file: " << mem_req_file_ << std::endl
-            << "  mem_rep_file: " << mem_rep_file_ << std::endl
-            << log_opt_->ToString();
+        ss << "  batch_order_size: " << batch_order_size_ << std::endl
+           << "  enable_stock_short_selling: " << std::boolalpha << enable_stock_short_selling_ << std::endl
+           << "  idle_sleep_ns: " << idle_sleep_ns_ << "ns" << std::endl
+           << "  cpu_affinity: " << cpu_affinity_ << std::endl
+           << "  mem_dir: " << mem_dir_ << std::endl
+           << "  mem_req_file: " << mem_req_file_ << std::endl
+           << "  mem_rep_file: " << mem_rep_file_ << std::endl
+           << log_opt_->ToString();
         return ss.str();
     }
 }  // namespace co

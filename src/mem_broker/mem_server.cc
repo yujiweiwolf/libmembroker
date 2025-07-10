@@ -55,18 +55,13 @@ void MemBrokerServer::Run() {
 
     auto& accounts = broker_->GetAccounts();
     for (const auto& [key, value] : accounts) {
+        // 只考虑股票
         if (value.type == kTradeTypeSpot) {
-            sh_th_tps_limit_ = value.batch_order_size;
-            sz_th_tps_limit_ = value.batch_order_size;
             for (auto& it : opt_->flow_controls()) {
                 if (co::kMarketSH == it->market()) {
-                    if (sh_th_tps_limit_ > it->th_tps_limit()) {
-                        sh_th_tps_limit_ = it->th_tps_limit();
-                    }
+                    sh_th_tps_limit_ = it->th_tps_limit();
                 } else if (co::kMarketSZ == it->market()) {
-                    if (sz_th_tps_limit_ > it->th_tps_limit()) {
-                        sz_th_tps_limit_ = it->th_tps_limit();
-                    }
+                    sz_th_tps_limit_ = it->th_tps_limit();
                 }
             }
             LOG_INFO << "account: " << key << ", sh_th_tps_limit: " << sh_th_tps_limit_ << ", sz_th_tps_limit: " << sz_th_tps_limit_;
@@ -774,7 +769,7 @@ void  MemBrokerServer::SendTradeOrderRep(MemTradeOrderMessage* rep) {
         LOG_ERROR << "[REP][WaitRep=" << pending_orders_.size()
                   << "] send order failed in " << ms << "ms, rep = " << ToString(rep);
     } else {
-        LOG_ERROR << "[REP][WaitRep=" << pending_orders_.size()
+        LOG_INFO << "[REP][WaitRep=" << pending_orders_.size()
                   << "] send order ok in " << ms << "ms, rep = " << ToString(rep);
     }
     int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * rep->items_size;
@@ -795,7 +790,7 @@ void  MemBrokerServer::SendTradeWithdrawRep(MemTradeWithdrawMessage* rep) {
         LOG_ERROR << "[REP][WaitRep=" << pending_withdraws_.size()
                   << "] send withdraw failed in " << ms << "ms, rep = " << ToString(rep);
     } else {
-        LOG_ERROR << "[REP][WaitRep=" << pending_withdraws_.size()
+        LOG_INFO << "[REP][WaitRep=" << pending_withdraws_.size()
                   << "] send withdraw ok in " << ms << "ms, rep = " << ToString(rep);
     }
     int length = sizeof(MemTradeWithdrawMessage);

@@ -76,15 +76,22 @@ namespace co {
         char buffer[length] = "";
         memcpy(buffer, req, length);
         MemTradeOrderMessage* rep = (MemTradeOrderMessage*)buffer;
+        string batch_no = "";
+        std::vector<std::string> vec_order_no;
         if (rep->items_size > 1) {
-            string batch_no = "1-" + std::to_string(rep->items_size) + std::to_string(batch_no_index_++);
+            MemTradeOrder* order = req->items + 0;
+            batch_no = CreateStandardBatchNo(order->market, rep->items_size, std::to_string(batch_no_index_++));
             strncpy(rep->batch_no, batch_no.c_str(), batch_no.length());
         }
         auto items = (MemTradeOrder*)((char*)rep + sizeof(MemTradeOrderMessage));
         for (int i = 0; i < rep->items_size; i++) {
             MemTradeOrder* order = items + i;
-            string order_no = "1-" + std::to_string(order_no_index_++);
+            string order_no = CreateStandardOrderNo(order->market, std::to_string(order_no_index_++));
             strcpy(order->order_no, order_no.c_str());
+            vec_order_no.push_back(order_no);
+        }
+        if (!batch_no.empty()) {
+            all_batch_.insert(std::make_pair(batch_no, vec_order_no));
         }
         SendRtnMessage(string(buffer, length), kMemTypeTradeOrderRep);
         {
@@ -99,32 +106,40 @@ namespace co {
                 strcpy(knock->code, order->code);
                 strcpy(knock->order_no, order->order_no);
                 knock->bs_flag = rep->bs_flag;
-                knock->match_volume = order->volume;
-                int index = (order->volume / 100) % 3;
-                if (index == 1) {
-                    knock->match_type = 1;
+                // 100 全部成交; 200 废单; 300 部分成交; 其它 不成交
+                if (order->volume == 100) {
+                    knock->match_type = co::kMatchTypeOK;
+                    knock->match_volume = order->volume;
                     knock->match_price = order->price;
-                    knock->match_amount = order->price * order->volume * 100;
-                    string match_no = "match_no" + std::to_string(order_no_index_++);
+                    knock->match_amount = order->price * knock->match_volume;
+                    string match_no = "MATCH_" + std::to_string(order_no_index_++);
                     strcpy(knock->match_no, match_no.c_str());
-                } else if (index == 2) {
-//                    knock->match_type = 2;
-//                    knock->match_price = 0;
-//                    knock->match_amount = 0;
-//                    string match_no = "_" + string(knock->order_no);
-//                    strcpy(knock->match_no, match_no.c_str());
-                    MemTradeOrder tmp = {};
-                    memcpy(&tmp, order, sizeof(tmp));
-                    int64_t bs_flag = req->bs_flag;
-                    all_order_.insert(std::make_pair(order->order_no, std::make_pair(bs_flag, tmp)));
-                    continue;
-                } else {
-                    knock->match_type = 3;
+                } else if (order->volume == 200) {
+                    knock->match_type = co::kMatchTypeFailed;
+                    knock->match_volume = order->volume;
                     knock->match_price = 0;
                     knock->match_amount = 0;
                     string match_no = "_" + string(knock->order_no);
                     strcpy(knock->match_no, match_no.c_str());
                     strcpy(knock->error, "报单价格不正确");
+                } else if (order->volume == 300) {
+                    knock->match_type = co::kMatchTypeOK;
+                    knock->match_volume = 50;
+                    knock->match_price = order->price;
+                    knock->match_amount = order->price * knock->match_volume;
+                    string match_no = "MATCH_" + std::to_string(order_no_index_++);
+                    strcpy(knock->match_no, match_no.c_str());
+                    MemTradeOrder tmp = {};
+                    memcpy(&tmp, order, sizeof(tmp));
+                    tmp.volume = order->volume - knock->match_volume;
+                    int64_t bs_flag = req->bs_flag;
+                    all_order_.insert(std::make_pair(order->order_no, std::make_pair(bs_flag, tmp)));
+                } else {
+                    MemTradeOrder tmp = {};
+                    memcpy(&tmp, order, sizeof(tmp));
+                    int64_t bs_flag = req->bs_flag;
+                    all_order_.insert(std::make_pair(order->order_no, std::make_pair(bs_flag, tmp)));
+                    continue;
                 }
                 SendRtnMessage(string(buffer, length), kMemTypeTradeKnock);
             }
@@ -144,33 +159,74 @@ namespace co {
         std::unique_lock<std::mutex> lock(mutex_);
         all_req_.emplace(std::pair(req->id, std::pair(kMemTypeTradeWithdrawReq ,buffer)));
 #endif
-        int64_t rep_time = x::RawDateTime();
         LOG_INFO << "回写撤单回报";
         int length = sizeof(MemTradeWithdrawMessage);
         char buffer[length] = "";
         memcpy(buffer, req, length);
         MemTradeWithdrawMessage* rep = (MemTradeWithdrawMessage*)buffer;
-        if (rep_time % 2 == 0) {
-            strcpy(rep->error, "撤单错误，报单已成交");
-        }
-        SendRtnMessage(string(buffer, length), kMemTypeTradeWithdrawRep);
-        if (auto it = all_order_.find(req->order_no); it != all_order_.end()) {
-            int length = sizeof(MemTradeKnock);
-            char buffer[length] = "";
-            MemTradeKnock* knock = (MemTradeKnock*) buffer;
-            knock->timestamp = x::RawDateTime();
-            strcpy(knock->fund_id, rep->fund_id);
-            strcpy(knock->code, it->second.second.code);
-            strcpy(knock->order_no, rep->order_no);
-            knock->bs_flag = it->second.first;
-            knock->market = it->second.second.market;
-            knock->match_volume = it->second.second.volume;
-            knock->match_type = co::kMatchTypeWithdrawOK;
-            knock->match_price = 0;
-            knock->match_amount = 0;
-            string match_no = "_" + string(knock->order_no);
-            strcpy(knock->match_no, match_no.c_str());
-            SendRtnMessage(string(buffer, length), kMemTypeTradeKnock);
+        if (strlen(req->order_no) > 0) {
+            if (auto it = all_order_.find(req->order_no); it != all_order_.end()) {
+                SendRtnMessage(string(buffer, length), kMemTypeTradeWithdrawRep);
+                {
+                    x::Sleep(1000);
+                    int length = sizeof(MemTradeKnock);
+                    char buffer[length] = "";
+                    MemTradeKnock *knock = (MemTradeKnock *) buffer;
+                    knock->timestamp = x::RawDateTime();
+                    strcpy(knock->fund_id, rep->fund_id);
+                    strcpy(knock->code, it->second.second.code);
+                    strcpy(knock->order_no, rep->order_no);
+                    knock->bs_flag = it->second.first;
+                    knock->market = it->second.second.market;
+                    knock->match_volume = it->second.second.volume;
+                    knock->match_type = co::kMatchTypeWithdrawOK;
+                    knock->match_price = 0;
+                    knock->match_amount = 0;
+                    string match_no = "_" + string(knock->order_no);
+                    strcpy(knock->match_no, match_no.c_str());
+                    SendRtnMessage(string(buffer, length), kMemTypeTradeKnock);
+                    all_order_.erase(it);
+                }
+            } else {
+                strcpy(rep->error, "撤单错误，报单已成交");
+                SendRtnMessage(string(buffer, length), kMemTypeTradeWithdrawRep);
+            }
+        } else if (strlen(req->batch_no) > 0) {
+            if (auto it = all_batch_.find(req->batch_no); it != all_batch_.end()) {
+                SendRtnMessage(string(buffer, length), kMemTypeTradeWithdrawRep);
+                {
+                    for (auto& iter : it->second) {
+                        if (auto it = all_order_.find(iter); it != all_order_.end()) {
+                            x::Sleep(1000);
+                            int length = sizeof(MemTradeKnock);
+                            char buffer[length] = "";
+                            MemTradeKnock *knock = (MemTradeKnock *) buffer;
+                            knock->timestamp = x::RawDateTime();
+                            strcpy(knock->fund_id, rep->fund_id);
+                            strcpy(knock->code, it->second.second.code);
+                            strcpy(knock->order_no, it->first.c_str());
+                            knock->bs_flag = it->second.first;
+                            knock->market = it->second.second.market;
+                            knock->match_volume = it->second.second.volume;
+                            knock->match_type = co::kMatchTypeWithdrawOK;
+                            knock->match_price = 0;
+                            knock->match_amount = 0;
+                            string match_no = "_" + string(knock->order_no);
+                            strcpy(knock->match_no, match_no.c_str());
+                            strcpy(knock->batch_no, req->batch_no);
+                            SendRtnMessage(string(buffer, length), kMemTypeTradeKnock);
+                            all_order_.erase(it);
+                        }
+                    }
+                }
+                all_batch_.erase(it);
+            } else {
+                strcpy(rep->error, "撤单错误，报单已成交");
+                SendRtnMessage(string(buffer, length), kMemTypeTradeWithdrawRep);
+            }
+        } else {
+            strcpy(rep->error, "order_no and batch_no both empty");
+            SendRtnMessage(string(buffer, length), kMemTypeTradeWithdrawRep);
         }
     }
 

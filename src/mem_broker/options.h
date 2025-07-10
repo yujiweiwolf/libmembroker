@@ -92,6 +92,10 @@ class MemBrokerOptions {
         return cpu_affinity_;
     }
 
+    inline int64_t batch_order_size() const {
+        return batch_order_size_;
+    }
+
     inline bool enable_stock_short_selling() const {
         return enable_stock_short_selling_;
     }
@@ -127,6 +131,7 @@ class MemBrokerOptions {
     int64_t request_timeout_ms_ = 5000;  // 请求超时时间
     bool disable_flow_control_ = false;  // 强制明确禁用流控
     std::vector<std::unique_ptr<FlowControlConfig>> flow_controls_;
+    int64_t batch_order_size_ = 1;  // 批量委托的篮子上限
 
     bool enable_stock_short_selling_ = false;  // 启用股票账户融券模式
     bool enable_query_only_ = false;  // 是否启用只查询模式，不接收报单和撤单等指令

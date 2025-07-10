@@ -81,8 +81,7 @@ namespace co {
                 }
                 strncpy(account->fund_id, fund_id.c_str(), fund_id.length());
                 account->type = trade_type;
-//                route->fund_id = fund_id;
-//                route->markets.insert(route->markets.begin(), markets.begin(), markets.end());
+                account->batch_order_size = options_->batch_order_size();
                 accounts_[fund_id] = std::move(account);
             }
         }

@@ -38,7 +38,8 @@ class TestBroker: public MemBroker {
     std::shared_ptr<std::thread> rep_thread_ = nullptr;
     std::mutex mutex_;
     std::unordered_map<std::string, std::pair<int64_t, void*>> all_req_;
-    std::unordered_map<std::string, std::pair<int64_t, MemTradeOrder>> all_order_;
+    std::unordered_map<std::string, std::pair<int64_t, MemTradeOrder>> all_order_; // key is order_no
+    std::unordered_map<std::string, std::vector<std::string>> all_batch_; // key is batch_no, value is order_no
 };
 }  // namespace co
 

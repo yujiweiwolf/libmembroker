@@ -4,10 +4,11 @@ broker:
   query_position_interval_ms: 0
   query_knock_interval_ms: 0
   request_timeout_ms: 5000
-  disable_flow_control: true
+  disable_flow_control: false
   flow_control:
-    - { market: ".SH", th_tps_limit: 550, th_daily_warning: 17000, th_daily_limit: 18000 }
-    - { market: ".SZ", th_tps_limit: 550, th_daily_warning: 17000, th_daily_limit: 18000 }
+    - { market: ".SH", th_tps_limit: 350, th_daily_warning: 17000, th_daily_limit: 18000 }
+    - { market: ".SZ", th_tps_limit: 450, th_daily_warning: 17000, th_daily_limit: 18000 }
+  batch_order_size: 200
   enable_stock_short_selling: false
   idle_sleep_ns: 1000000
   cpu_affinity: 0
