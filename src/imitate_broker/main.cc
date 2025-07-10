@@ -185,13 +185,6 @@ void ReadRep() {
 }
 
 int main(int argc, char* argv[]) {
-//    string order_no = "1-151824089";
-//    std::smatch result;
-//    bool flag = regex_match(order_no, result, std::regex("^(1|2)-([0-9a-zA-Z]{1,100})$"));
-//    if (!flag) {
-//        return 1;
-//    }
-
     try {
         MemBrokerOptionsPtr options = Config::Instance()->options();
         const std::vector<std::shared_ptr<RiskOptions>>& risk_opts = Config::Instance()->risk_opt();

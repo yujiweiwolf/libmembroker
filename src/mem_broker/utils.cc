@@ -250,7 +250,7 @@ namespace co {
             if (strlen(req->order_no)) {
                 string order_no = req->order_no;
                 std::smatch result;
-                bool flag = regex_match(order_no, result, std::regex("^(1|2|3|9)-([0-9a-zA-Z]{1,100})$"));
+                bool flag = regex_match(order_no, result, std::regex("^(1|2|3|9)-(.*)"));
                 if (!flag) {
                     return ("not valid order_no: " + order_no);
                 }
@@ -259,7 +259,7 @@ namespace co {
             if (strlen(req->batch_no)) {
                 string batch_no = req->batch_no;
                 std::smatch result;
-                bool flag = regex_match(batch_no, result, std::regex("^(1|2|3|9)-([0-9]{1,3})-([0-9a-zA-Z]{1,100})$"));
+                bool flag = regex_match(batch_no, result, std::regex("^(1|2|3|9)-([0-9]{1,3})-(.*)"));
                 if (!flag) {
                     return ("not valid order_no: " + batch_no);
                 }

@@ -14,6 +14,7 @@ class RiskOptions {
     ~RiskOptions();
     RiskOptions(const RiskOptions&) = delete;
     RiskOptions& operator=(const RiskOptions&) = delete;
+    static std::vector<std::shared_ptr<RiskOptions>> Load(const std::string& filename = "");
 
     std::string id() const;
     void set_id(std::string id);

@@ -45,7 +45,7 @@ bool Order::IsFinished() {
         finish_flag = true;
         return finish_flag;
     }
-    return finish_flag;
+    return false;
 }
 
 OrderBook::OrderBook(AntiSelfKnockRisker* risker): risker_(risker) {

@@ -86,36 +86,37 @@ namespace co {
                 accounts_[fund_id] = std::move(account);
             }
         }
-        auto risk = root["risk"];
-        if (risk["accounts"] && !risk["accounts"].IsNull()) {
-            for (auto item : risk["accounts"]) {
-                std::shared_ptr<RiskOptions> opt = std::make_shared<RiskOptions>();
-                std::string fund_id = getStr(item, "fund_id");
-                std::string risker_id = getStr(item, "risker_id");
-                std::string name = getStr(item, "name");
-                std::string json = getStr(item, "data");
-
-                bool disabled = getBool(item, "disabled");
-                bool enable_prevent_self_knock = getBool(item, "enable_prevent_self_knock");
-                bool only_etf_anti_self_knock = getBool(item, "only_etf_anti_self_knock");
-                opt->set_risker_id(risker_id);
-                opt->set_fund_id(fund_id);
-                opt->set_disabled(disabled);
-                std::string data = "{\"enable_prevent_self_knock\":" + string(enable_prevent_self_knock ? "true" : "false") +
-                        "," + "\"only_etf_anti_self_knock\":" + string(only_etf_anti_self_knock ? "true" : "false") +
-                        "," + "\"name\":" + "\"" +  name + "\""
-                        "," + json + "}";
-                opt->set_data(data);
-
-//                double cancel_ratio_threshold_ = opt->GetFloat64("withdraw_ratio");
-//                double knock_ratio_threshold_ = opt->GetFloat64("knock_ratio");
-//                double failure_ratio_threshold_ = opt->GetFloat64("failure_ratio");
-//                int64_t max_order_volume = opt->GetInt64("max_order_volume");
-//                double max_order_amount = opt->GetFloat64("max_order_amount");
-//                bool flag = opt->GetBool("enable_prevent_self_knock");
-                risk_opts_.push_back(opt);
-            }
-        }
+//        auto risk = root["risk"];
+//        if (risk["accounts"] && !risk["accounts"].IsNull()) {
+//            for (auto item : risk["accounts"]) {
+//                std::shared_ptr<RiskOptions> opt = std::make_shared<RiskOptions>();
+//                std::string fund_id = getStr(item, "fund_id");
+//                std::string risker_id = getStr(item, "risker_id");
+//                std::string name = getStr(item, "name");
+//                std::string json = getStr(item, "data");
+//
+//                bool disabled = getBool(item, "disabled");
+//                bool enable_prevent_self_knock = getBool(item, "enable_prevent_self_knock");
+//                bool only_etf_anti_self_knock = getBool(item, "only_etf_anti_self_knock");
+//                opt->set_risker_id(risker_id);
+//                opt->set_fund_id(fund_id);
+//                opt->set_disabled(disabled);
+//                std::string data = "{\"enable_prevent_self_knock\":" + string(enable_prevent_self_knock ? "true" : "false") +
+//                        "," + "\"only_etf_anti_self_knock\":" + string(only_etf_anti_self_knock ? "true" : "false") +
+//                        "," + "\"name\":" + "\"" +  name + "\""
+//                        "," + json + "}";
+//                opt->set_data(data);
+//
+////                double cancel_ratio_threshold_ = opt->GetFloat64("withdraw_ratio");
+////                double knock_ratio_threshold_ = opt->GetFloat64("knock_ratio");
+////                double failure_ratio_threshold_ = opt->GetFloat64("failure_ratio");
+////                int64_t max_order_volume = opt->GetInt64("max_order_volume");
+////                double max_order_amount = opt->GetFloat64("max_order_amount");
+////                bool flag = opt->GetBool("enable_prevent_self_knock");
+//                risk_opts_.push_back(opt);
+//            }
+//        }
+        risk_opts_ = RiskOptions::Load(filename);
         stringstream ss;
         ss << "+-------------------- configuration begin --------------------+" << endl;
         ss << options_->ToString() << endl;

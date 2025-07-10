@@ -195,7 +195,6 @@ void AntiSelfKnockRisker::HandleTradeWithdrawRep(MemTradeWithdrawMessage* rep) {
                 order->withdraw_failed_time = x::UnixMilli();
             } else {  // 撤单成功
                 order->withdraw_succeed = true;
-                single_orders_.erase(itr);
             }
         }
     }
@@ -220,6 +219,9 @@ void AntiSelfKnockRisker::OnTradeKnock(MemTradeKnock* knock) {
             OnOrderFinish(order);
         }
     } else {
+        if (knock->match_type == kMatchTypeWithdrawOK) {
+            return;
+        }
         // 先收到成交回报, 后收到报单响应
         auto opt = GetOption(fund_id);
         if (!opt) {
