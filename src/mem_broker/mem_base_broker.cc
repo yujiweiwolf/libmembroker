@@ -61,6 +61,10 @@ void MemBroker::AddAccount(const co::MemTradeAccount& account) {
     accounts_[account.fund_id] = account;
 }
 
+void MemBroker::AddT0Code(const string& code) {
+    inner_stock_master_.AddT0Code(code);
+}
+
 void MemBroker::OnStart() {
     server_->OnStart();
 }
@@ -123,14 +127,14 @@ void MemBroker::SendTradeOrder(MemTradeOrderMessage* req) {
             int64_t oc_flag = order->oc_flag;
             if (trade_type == kTradeTypeSpot && enable_stock_short_selling_) {
                 // 处理信用账户自动融券逻辑
-                order->oc_flag = inner_stock_master_.GetOcFlag(req->fund_id, req->bs_flag, *order);
-                inner_stock_master_.HandleOrderReq(req->fund_id, req->bs_flag, *order);
+                order->oc_flag = inner_stock_master_.GetOcFlag(req->bs_flag, *order);
+                inner_stock_master_.HandleOrderReq(req->bs_flag, *order);
             } else if (trade_type == kTradeTypeOption) {
                 // 处理期权自动开平仓逻辑：获取自动开平仓标记
                 if (oc_flag == kOcFlagAuto) {
-                    order->oc_flag = inner_option_master_.GetAutoOcFlag(req->fund_id, req->bs_flag, *order);
+                    order->oc_flag = inner_option_master_.GetAutoOcFlag(req->bs_flag, *order);
                 }
-                inner_option_master_.HandleOrderReq(req->fund_id, req->bs_flag, *order);
+                inner_option_master_.HandleOrderReq(req->bs_flag, *order);
             }
         }
         OnTradeOrder(req);
@@ -180,13 +184,13 @@ void MemBroker::SendTradeOrderRep(MemTradeOrderMessage* rep) {
             MemTradeOrder* items = rep->items;
             for (int i = 0; i < rep->items_size; i++) {
                 MemTradeOrder* order = items + i;
-                inner_stock_master_.HandleOrderRep(rep->fund_id, rep->bs_flag, *order);
+                inner_stock_master_.HandleOrderRep(rep->bs_flag, *order);
             }
         } else if (account->type == kTradeTypeOption) {
             MemTradeOrder* items = rep->items;
             for (int i = 0; i < rep->items_size; i++) {
                 MemTradeOrder* order = items + i;
-                inner_option_master_.HandleOrderRep(rep->fund_id, rep->bs_flag, *order);
+                inner_option_master_.HandleOrderRep(rep->bs_flag, *order);
             }
         }
     }

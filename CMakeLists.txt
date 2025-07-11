@@ -34,7 +34,6 @@ add_library(risker
         )
 
 aux_source_directory (./src/mem_broker LIB_LIST)
-#message(${LIB_LIST})
 add_library (membroker ${LIB_LIST})
 add_dependencies(membroker risker)
 
@@ -47,8 +46,9 @@ add_executable(send_req src/send_req/send_req.cc)
 target_link_libraries(send_req
         coral swordfish x stdc++fs yaml-cpp  clickhouse-cpp-lib-static boost_date_time boost_filesystem boost_regex boost_system  boost_chrono boost_log boost_program_options boost_thread boost_iostreams boost_context boost_coroutine z protobuf protobuf-lite sodium zmq ssl crypto iconv pthread dl)
 
-aux_source_directory (src/gtest/test_membroker TESTBROKER)
-add_executable(gtest_broker ${TESTBROKER})
+#aux_source_directory (src/gtest/test_membroker TESTBROKER)
+#add_executable(gtest_broker ${TESTBROKER})
+add_executable(gtest_broker src/gtest/test_membroker/test_unit.cc)
 target_link_libraries(gtest_broker
         gtest gtest_main membroker coral swordfish x stdc++fs yaml-cpp  clickhouse-cpp-lib-static boost_date_time boost_filesystem boost_regex boost_system  boost_chrono boost_log boost_program_options boost_thread boost_iostreams z protobuf protobuf-lite sodium zmq ssl crypto iconv pthread dl)
 

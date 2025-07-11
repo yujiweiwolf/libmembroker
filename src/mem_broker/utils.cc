@@ -51,44 +51,6 @@ namespace co {
         std_order_no.append(1, '-');
         std_order_no.append(order_no);
         return std_order_no;
-//        if (market <= 0) {
-//            throw std::invalid_argument("create standard order_no failed because of illegal market: " +
-//                std::to_string(market));
-//        }
-//        std::string std_order_no;
-//        switch (market) {
-//            case co::kMarketSH:
-//                if (order_no.size() >= 3 && order_no[0] == 'S' && order_no[1] == 'H' && order_no[2] == '-') {
-//                    std_order_no = order_no;
-//                } else {
-//                    std_order_no.reserve(order_no.size() + 4);
-//                    std_order_no.append("SH-");
-//                    std_order_no.append(order_no);
-//                }
-//                break;
-//            case co::kMarketSZ:
-//                if (order_no.size() >= 3 && order_no[0] == 'S' && order_no[1] == 'Z' && order_no[2] == '-') {
-//                    std_order_no = order_no;
-//                } else {
-//                    std_order_no.reserve(order_no.size() + 4);
-//                    std_order_no.append("SZ-");
-//                    std_order_no.append(order_no);
-//                }
-//                break;
-//            case co::kMarketBJ:
-//                if (order_no.size() >= 3 && order_no[0] == 'B' && order_no[1] == 'J' && order_no[2] == '-') {
-//                    std_order_no = order_no;
-//                } else {
-//                    std_order_no.reserve(order_no.size() + 4);
-//                    std_order_no.append("BJ-");
-//                    std_order_no.append(order_no);
-//                }
-//                break;
-//            default:
-//                std_order_no = order_no;
-//                break;
-//        }
-//        return std_order_no;
     }
 
     std::string ParseStandardOrderNo(const std::string_view& order_no, int64_t* market) {
@@ -192,14 +154,14 @@ namespace co {
 
     std::string CheckTradeOrderMessage(MemTradeOrderMessage *req, int sh_th_tps_limit, int sz_th_tps_limit) {
         if (req->items_size <= 0) {
-            return "no orders in request";
+            return "[FAN-BROKER-ERROR] items_size is zero";
         }
         auto first = req->items;
         int64_t first_market = 0;
         for (int i = 0; i < req->items_size; ++i) {
             auto order = first + i;
             if (strlen(order->code) == 0) {
-                return "code is required";
+                return "[FAN-BROKER-ERROR] code is required";
             }
             int64_t market = order->market;
             if (market <= 0) {
@@ -208,16 +170,16 @@ namespace co {
             }
             if (market <= 0) {
                 std::stringstream ss;
-                return ("unknown market suffix in code: " + string(order->code));
+                return ("[FAN-BROKER-ERROR] unknown market suffix in code: " + string(order->code));
             }
             int max_batch_size = 0;
             if (market == co::kMarketSH) {
                 max_batch_size = sh_th_tps_limit;
-            } else if (market == co::kMarketSH) {
+            } else if (market == co::kMarketSZ) {
                 max_batch_size = sz_th_tps_limit;
             }
             if (max_batch_size > 0 && req->items_size > max_batch_size) {
-                return ("too many orders in request: " + std::to_string(req->items_size) + ", up limit is: " + std::to_string(max_batch_size));
+                return ("[FAN-BROKER-ERROR] too many orders in request: " + std::to_string(req->items_size) + ", up limit is: " + std::to_string(max_batch_size));
             }
 
             if (i == 0) {
@@ -225,7 +187,7 @@ namespace co {
             }
             if (i > 0 && market != first_market) {
                 std::stringstream ss;
-                ss << "all orders must have the same market: order[0].code="
+                ss << "[FAN-BROKER-ERROR] all orders must have the same market: order[0].code="
                    << first->code << ", order[" << i << "].code=" << order->code;
                 return ss.str();
             }
@@ -248,33 +210,40 @@ namespace co {
 
     std::string CheckTradeWithdrawMessage(MemTradeWithdrawMessage *req, int64_t trade_type) {
         if (strlen(req->order_no) == 0 && strlen(req->batch_no) == 0) {
-            return ("[FAN-BROKER-ERROR] order_no or batch_no is required");
+            return ("[FAN-BROKER-ERROR] order_no and batch_no both empty");
         }
         if (trade_type == kTradeTypeSpot) {
             if (strlen(req->order_no)) {
-                if (req->order_no[0] == '1') {
-                    req->market = co::kMarketSH;
-                } else if (req->order_no[0] == '2') {
-                    req->market = co::kMarketSZ;
+                if (req->market == 0) {
+                    if (req->order_no[0] == '1') {
+                        req->market = co::kMarketSH;
+                    } else if (req->order_no[0] == '2') {
+                        req->market = co::kMarketSZ;
+                    }
                 }
-                string order_no = req->order_no;
-                std::smatch result;
-                bool flag = regex_match(order_no, result, std::regex("^(1|2|3|9)-(.*)"));
-                if (!flag) {
-                    return ("not valid order_no: " + order_no);
+//                string order_no = req->order_no;
+//                std::smatch result;
+//                bool flag = regex_match(order_no, result, std::regex("^(1|2|3|9)-(.*)"));
+//                if (!flag) {
+//                    return ("[FAN-BROKER-ERROR] not valid order_no: " + order_no);
+//                }
+                if ((req->order_no[0] < '1' || req->order_no[0] > '9') || req->order_no[1] != '-') {
+                    return ("[FAN-BROKER-ERROR] not valid order_no: " + string(req->order_no));
                 }
                 return "";
             } else if (strlen(req->batch_no)) {
-                if (req->batch_no[0] == '1') {
-                    req->market = co::kMarketSH;
-                } else if (req->batch_no[0] == '2') {
-                    req->market = co::kMarketSZ;
+                if (req->market == 0) {
+                    if (req->batch_no[0] == '1') {
+                        req->market = co::kMarketSH;
+                    } else if (req->batch_no[0] == '2') {
+                        req->market = co::kMarketSZ;
+                    }
                 }
                 string batch_no = req->batch_no;
                 std::smatch result;
                 bool flag = regex_match(batch_no, result, std::regex("^(1|2|3|9)-([0-9]{1,3})-(.*)"));
                 if (!flag) {
-                    return ("not valid batch_no: " + batch_no);
+                    return ("[FAN-BROKER-ERROR] not valid batch_no: " + batch_no);
                 }
             }
         }

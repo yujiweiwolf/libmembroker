@@ -24,6 +24,8 @@ class MemBroker {
     bool ExitAccount(const string& fund_id);
     void AddAccount(const co::MemTradeAccount& account);
 
+    void AddT0Code(const string& code);
+
     void SendQueryTradeAsset(MemGetTradeAssetMessage* req);
     void SendQueryTradePosition(MemGetTradePositionMessage* req);
     void SendQueryTradeKnock(MemGetTradeKnockMessage* req);
@@ -63,7 +65,7 @@ class MemBroker {
     bool enable_stock_short_selling_ = false;  // 是否启用股票自动融券买卖
     int64_t request_timeout_ms_ = 0;
     InnerOptionMaster inner_option_master_;  // 期权内部持仓管理
-    InnerStockMaster inner_stock_master_;  // 股票内部持仓管理
+    InnerStockMaster inner_stock_master_;  // 信用broker, 股票内部持仓管理
 };
 
 typedef std::shared_ptr<MemBroker> MemBrokerPtr;
