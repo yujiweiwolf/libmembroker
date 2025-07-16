@@ -6,7 +6,6 @@
 #include "helper.h"
 using namespace co;
 
-string fund_id = "S1";
 // 测试流程
 // 1 普通卖, 报单失败
 // 2 普通卖，撤单
@@ -15,6 +14,7 @@ string fund_id = "S1";
 // 5 融券卖，成交
 
 TEST(InnerStockMaster, CommonTrade) {
+    string fund_id = "S1";
     string id = x::UUID();
     int total_pos_num = 1;
     int init_sell_volume = 1000;
@@ -36,7 +36,7 @@ TEST(InnerStockMaster, CommonTrade) {
         pos->short_can_open = init_borrowed_volume;
     }
     InnerStockMaster master;
-    master.SetInitPositions(msg);
+    master.InitPositions(msg);
     InnerStockPositionPtr pos = master.GetPosition(code);
     // 1 普通卖, 报单失败
     {
@@ -44,7 +44,7 @@ TEST(InnerStockMaster, CommonTrade) {
         strcpy(order.code, code.c_str());
         order.volume = order_volume;
         order.price = 9.9;
-        int64_t oc_flag = master.GetOcFlag(bs_flag, order);
+        int64_t oc_flag = master.GetAutoOcFlag(bs_flag, order);
         EXPECT_EQ(oc_flag, co::kOcFlagAuto);
 
         order.oc_flag = oc_flag;
@@ -68,7 +68,7 @@ TEST(InnerStockMaster, CommonTrade) {
         strcpy(order.code, code.c_str());
         order.volume = order_volume;
         order.price = 9.9;
-        int64_t oc_flag = master.GetOcFlag(bs_flag, order);
+        int64_t oc_flag = master.GetAutoOcFlag(bs_flag, order);
         EXPECT_EQ(oc_flag, co::kOcFlagAuto);
 
         order.oc_flag = oc_flag;
@@ -102,7 +102,7 @@ TEST(InnerStockMaster, CommonTrade) {
         strcpy(order.code, code.c_str());
         order.volume = order_volume;
         order.price = 9.9;
-        int64_t oc_flag = master.GetOcFlag(bs_flag, order);
+        int64_t oc_flag = master.GetAutoOcFlag(bs_flag, order);
         EXPECT_EQ(oc_flag, co::kOcFlagAuto);
 
         order.oc_flag = oc_flag;
@@ -137,7 +137,7 @@ TEST(InnerStockMaster, CommonTrade) {
         strcpy(order.code, code.c_str());
         order.volume = order_volume;
         order.price = 9.9;
-        int64_t oc_flag = master.GetOcFlag(bs_flag, order);
+        int64_t oc_flag = master.GetAutoOcFlag(bs_flag, order);
         EXPECT_EQ(oc_flag, co::kOcFlagAuto);
 
         order.oc_flag = oc_flag;
@@ -172,7 +172,7 @@ TEST(InnerStockMaster, CommonTrade) {
         strcpy(order.code, code.c_str());
         order.volume = new_order_volume;
         order.price = 9.9;
-        int64_t oc_flag = master.GetOcFlag(bs_flag, order);
+        int64_t oc_flag = master.GetAutoOcFlag(bs_flag, order);
         EXPECT_EQ(oc_flag, co::kOcFlagOpen);
 
         order.oc_flag = oc_flag;
@@ -210,6 +210,7 @@ TEST(InnerStockMaster, CommonTrade) {
 // 5 融券卖，成交
 
 TEST(InnerStockMaster, T0Trade) {
+    string fund_id = "S1";
     string id = x::UUID();
     int total_pos_num = 1;
     int init_sell_volume = 1000;
@@ -231,7 +232,7 @@ TEST(InnerStockMaster, T0Trade) {
         pos->short_can_open = init_borrowed_volume;
     }
     InnerStockMaster master;
-    master.SetInitPositions(msg);
+    master.InitPositions(msg);
     master.AddT0Code(code);
     InnerStockPositionPtr pos = master.GetPosition(code);
     // 1 普通卖, 报单失败
@@ -240,7 +241,7 @@ TEST(InnerStockMaster, T0Trade) {
         strcpy(order.code, code.c_str());
         order.volume = order_volume;
         order.price = 9.9;
-        int64_t oc_flag = master.GetOcFlag(bs_flag, order);
+        int64_t oc_flag = master.GetAutoOcFlag(bs_flag, order);
         EXPECT_EQ(oc_flag, co::kOcFlagAuto);
 
         order.oc_flag = oc_flag;
@@ -264,7 +265,7 @@ TEST(InnerStockMaster, T0Trade) {
         strcpy(order.code, code.c_str());
         order.volume = order_volume;
         order.price = 9.9;
-        int64_t oc_flag = master.GetOcFlag(bs_flag, order);
+        int64_t oc_flag = master.GetAutoOcFlag(bs_flag, order);
         EXPECT_EQ(oc_flag, co::kOcFlagAuto);
 
         order.oc_flag = oc_flag;
@@ -298,7 +299,7 @@ TEST(InnerStockMaster, T0Trade) {
         strcpy(order.code, code.c_str());
         order.volume = order_volume;
         order.price = 9.9;
-        int64_t oc_flag = master.GetOcFlag(bs_flag, order);
+        int64_t oc_flag = master.GetAutoOcFlag(bs_flag, order);
         EXPECT_EQ(oc_flag, co::kOcFlagAuto);
 
         order.oc_flag = oc_flag;
@@ -333,7 +334,7 @@ TEST(InnerStockMaster, T0Trade) {
         strcpy(order.code, code.c_str());
         order.volume = order_volume;
         order.price = 9.9;
-        int64_t oc_flag = master.GetOcFlag(bs_flag, order);
+        int64_t oc_flag = master.GetAutoOcFlag(bs_flag, order);
         EXPECT_EQ(oc_flag, co::kOcFlagAuto);
 
         order.oc_flag = oc_flag;
@@ -369,7 +370,7 @@ TEST(InnerStockMaster, T0Trade) {
         strcpy(order.code, code.c_str());
         order.volume = new_order_volume;
         order.price = 9.9;
-        int64_t oc_flag = master.GetOcFlag(bs_flag, order);
+        int64_t oc_flag = master.GetAutoOcFlag(bs_flag, order);
         EXPECT_EQ(oc_flag, co::kOcFlagAuto);
 
         order.oc_flag = oc_flag;
@@ -406,7 +407,7 @@ TEST(InnerStockMaster, T0Trade) {
         strcpy(order.code, code.c_str());
         order.volume = new_order_volume;
         order.price = 9.9;
-        int64_t oc_flag = master.GetOcFlag(bs_flag, order);
+        int64_t oc_flag = master.GetAutoOcFlag(bs_flag, order);
         EXPECT_EQ(oc_flag, co::kOcFlagOpen);
 
         order.oc_flag = oc_flag;

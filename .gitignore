@@ -28,3 +28,4 @@
 !lib/**/*.dtd
 
 cmake-build-debug/
+build/

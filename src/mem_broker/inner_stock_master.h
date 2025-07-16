@@ -17,7 +17,7 @@ using std::string;
 
 namespace co {
 struct InnerStockPosition {
-    InnerStockPosition(std::string code) : code_(code) {
+    explicit InnerStockPosition(std::string code) : code_(code) {
     }
 
     string ToString() {
@@ -57,15 +57,15 @@ class InnerStockMaster {
  public:
     InnerStockMaster() = default;
     void AddT0Code(const string& code);
-    void SetInitPositions(MemGetTradePositionMessage* rep);
+    void InitPositions(MemGetTradePositionMessage* rep);
     void HandleOrderReq(int64_t bs_flag, const MemTradeOrder& order);
     void HandleOrderRep(int64_t bs_flag, const MemTradeOrder& order);
     void HandleKnock(const MemTradeKnock& knock);
 
-    int64_t GetOcFlag(int64_t bs_flag, const MemTradeOrder& order);
+    int64_t GetAutoOcFlag(int64_t bs_flag, const MemTradeOrder& order);
     InnerStockPositionPtr GetPosition(std::string code);
 
-private:
+ private:
     bool IsAccountInitialized();
     bool IsT0Type(const std::string& code);
 

@@ -1,9 +1,9 @@
-# cmake_minimum_required(VERSION <specify CMake version here>)
 cmake_minimum_required(VERSION 3.16)
 project(libmembroker)
 
 set(CMAKE_BUILD_TYPE "Debug") # Release Debug
-add_compile_options(-std=c++17) # -std=c++17 -Wall -O2
+add_compile_options(-std=c++17)
+#add_compile_options(-std=c++17 -Wall -O2)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
 
@@ -49,7 +49,7 @@ target_link_libraries(send_req
 #aux_source_directory (src/gtest/test_membroker TESTBROKER)
 #add_executable(gtest_broker ${TESTBROKER})
 # test_unit.cc test_option_master.cc test_stock_master.cc
-add_executable(gtest_broker src/gtest/test_membroker/test_option_master.cc)
+add_executable(gtest_broker src/gtest/test_membroker/test_option_master.cc src/gtest/test_membroker/test_stock_master.cc)
 target_link_libraries(gtest_broker
         gtest gtest_main membroker coral swordfish x stdc++fs yaml-cpp  clickhouse-cpp-lib-static boost_date_time boost_filesystem boost_regex boost_system  boost_chrono boost_log boost_program_options boost_thread boost_iostreams z protobuf protobuf-lite sodium zmq ssl crypto iconv pthread dl)
 
@@ -58,7 +58,8 @@ target_link_libraries(gtest_risker
         gtest gtest_main risker coral swordfish x stdc++fs yaml-cpp  clickhouse-cpp-lib-static boost_date_time boost_filesystem boost_regex boost_system  boost_chrono boost_log boost_program_options boost_thread boost_iostreams z protobuf protobuf-lite sodium zmq ssl crypto iconv pthread dl)
 
 
-add_custom_target(cpplint COMMAND cpplint --recursive ${CMAKE_CURRENT_SOURCE_DIR}/src/mem_broker/*.*)
+add_custom_target(cpplint COMMAND cpplint --recursive ${CMAKE_CURRENT_SOURCE_DIR}/src/risker/*.*)
+#add_custom_target(cpplint COMMAND cpplint --recursive ${CMAKE_CURRENT_SOURCE_DIR}/src/mem_broker/*.*)
 
 
 

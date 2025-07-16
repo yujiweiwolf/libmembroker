@@ -286,7 +286,7 @@ void MemBrokerServer::ReadReqMem() {
             }
         }
     }
- }
+}
 
 void MemBrokerServer::HandleQueueMessage() {
     try {
@@ -381,7 +381,7 @@ void MemBrokerServer::HandleQueueMessage() {
     } catch (std::exception & e) {
         LOG_ERROR << "handle message error: " << e.what();
     }
- }
+}
 
 void MemBrokerServer::RunQuery() {
     flatbuffers::FlatBufferBuilder fbb;
@@ -537,7 +537,7 @@ bool MemBrokerServer::MemBrokerServer::IsNewMemTradeKnock(MemTradeKnock* knock) 
         flag = true;
     }
     return flag;
- }
+}
 
 void MemBrokerServer::SendQueryTradeAssetRep(MemGetTradeAssetMessage* rep) {
     int64_t ms = x::SubRawDateTime(x::RawDateTime(), rep->timestamp);
@@ -619,10 +619,10 @@ void MemBrokerServer::SendQueryTradePositionRep(MemGetTradePositionMessage* rep)
     }
     std::string id = rep->id;
     if (x::StartsWith(id, "INIT_OPTION_")) {
-        broker_->SetInitPositions(rep, kTradeTypeOption);
+        broker_->InitPositions(rep, kTradeTypeOption);
         return;
     } else if (x::StartsWith(id, "INIT_STOCK_")) {
-        broker_->SetInitPositions(rep, kTradeTypeSpot);
+        broker_->InitPositions(rep, kTradeTypeSpot);
         return;
     }
     wait_size_--;
@@ -760,7 +760,7 @@ void  MemBrokerServer::SendTradeOrderRep(MemTradeOrderMessage* rep) {
     if (start_time_ > rep->timestamp) {
         return;
     }
-    broker_->SendTradeOrderRep(rep);
+    broker_->HandleTradeOrderRep(rep);
     if (auto it = pending_orders_.find(rep->id); it != pending_orders_.end()) {
         pending_orders_.erase(it);
     }
@@ -829,7 +829,7 @@ void MemBrokerServer::CreateInnerMatchNo(MemTradeKnock* knock) {
 
 void  MemBrokerServer::SendTradeKnock(MemTradeKnock* knock) {
     if (IsNewMemTradeKnock(knock)) {
-        broker_->SendTradeKnock(knock);
+        broker_->HandleTradeKnock(knock);
         int length = sizeof(MemTradeKnock);
         void* buffer = rep_writer_.OpenFrame(length);
         memcpy(buffer, knock, length);

@@ -4,11 +4,12 @@
 #include "../../mem_broker/inner_option_master.h"
 
 using namespace co;
-string fund_id = "S1";
+
 string code_0 = "600000.SH";
 string code_1 = "600030.SH";
 
 TEST(InnerOptionMaster, TestSimpleOrder) {
+    string fund_id = "S1";
     string id = x::UUID();
     int total_pos_num = 2;
     int long_can_close = 800;
@@ -31,7 +32,7 @@ TEST(InnerOptionMaster, TestSimpleOrder) {
         pos->short_can_close = short_can_close;
     }
     InnerOptionMaster master;
-    master.SetInitPositions(msg);
+    master.InitPositions(msg);
 
     // 买，数量大于short_can_close，开
     {
@@ -85,6 +86,7 @@ TEST(InnerOptionMaster, TestSimpleOrder) {
 // 4 卖开
 
 TEST(InnerOptionMaster, TestSellClose) {
+    string fund_id = "S1";
     string id = x::UUID();
     int total_pos_num = 1;
     int long_can_close = 1000;
@@ -104,7 +106,7 @@ TEST(InnerOptionMaster, TestSellClose) {
         pos->short_can_close = short_can_close;
     }
     InnerOptionMaster master;
-    master.SetInitPositions(msg);
+    master.InitPositions(msg);
 
     int64_t bs_flag = co::kBsFlagSell;
     // 1 卖平, 报单失败
@@ -237,6 +239,7 @@ TEST(InnerOptionMaster, TestSellClose) {
 // 4 买开，成交
 
 TEST(InnerOptionMaster, TestBuyClose) {
+    string fund_id = "S1";
     string id = x::UUID();
     int total_pos_num = 1;
     int long_can_close = 1000;
@@ -256,7 +259,7 @@ TEST(InnerOptionMaster, TestBuyClose) {
         pos->short_can_close = short_can_close;
     }
     InnerOptionMaster master;
-    master.SetInitPositions(msg);
+    master.InitPositions(msg);
 
     int64_t bs_flag = co::kBsFlagBuy;
     // 1 买平, 报单失败

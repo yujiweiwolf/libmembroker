@@ -1,8 +1,8 @@
-// Copyright 2021 Fancapital Inc.  All rights reserved.
+// Copyright 2025 Fancapital Inc.  All rights reserved.
 #include "inner_option_master.h"
 
 namespace co {
-void InnerOptionMaster::SetInitPositions(MemGetTradePositionMessage* rep) {
+void InnerOptionMaster::InitPositions(MemGetTradePositionMessage* rep) {
     LOG_INFO << "set init option position";
     positions_.clear();
     if (rep->items_size > 0) {
@@ -153,8 +153,7 @@ void InnerOptionMaster::HandleKnock(const MemTradeKnock& knock) {
     }
 }
 
-void InnerOptionMaster::Update(InnerOptionPositionPtr pos, int64_t oc_flag, int64_t order_volume,
-                               int64_t match_volume, int64_t withdraw_volume) {
+void InnerOptionMaster::Update(InnerOptionPositionPtr pos, int64_t oc_flag, int64_t order_volume, int64_t match_volume, int64_t withdraw_volume) {
     if (!pos) {
         return;
     }

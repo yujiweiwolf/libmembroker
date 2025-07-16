@@ -1,5 +1,5 @@
+// Copyright 2025 Fancapital Inc.  All rights reserved.
 #pragma once
-
 #include <string>
 #include <random>
 #include <algorithm>
@@ -7,9 +7,7 @@
 #include "coral/coral.h"
 
 namespace co {
-
     constexpr int64_t kMaxBodyBytes = 64 << 20; // 最大网络消息大小，64MB
-
     std::string SafeGBKToUTF8(const std::string& str);
     std::string DropCodeSuffix(const std::string& code);
     std::string AddCodeSuffix(const std::string& code, const int64_t& market);
@@ -26,5 +24,4 @@ namespace co {
     std::string CheckTradeWithdrawMessage(MemTradeWithdrawMessage *req, int64_t trade_type);
 
     std::string GenerateRandomString(size_t length);
-
-}
+}  // namespace co

@@ -246,7 +246,7 @@ void RiskMaster::RiskMasterImpl::Run() {
                         if (broker_fund.compare(rep->fund_id) != 0) {
                             auto riskers = GetRiskers(rep->fund_id);
                             if (riskers) {
-                                for (auto &risker: *riskers) {
+                                for (auto &risker : *riskers) {
                                     risker->HandleTradeWithdrawRep(rep);
                                 }
                             }
@@ -258,7 +258,7 @@ void RiskMaster::RiskMasterImpl::Run() {
                         if (broker_fund.compare(knock->fund_id) != 0) {
                             auto riskers = GetRiskers(knock->fund_id);
                             if (riskers) {
-                                for (auto &risker: *riskers) {
+                                for (auto &risker : *riskers) {
                                     risker->OnTradeKnock(knock);
                                 }
                             }

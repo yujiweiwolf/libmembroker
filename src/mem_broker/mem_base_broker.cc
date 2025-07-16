@@ -95,11 +95,11 @@ void MemBroker::SendQueryTradePosition(MemGetTradePositionMessage* req) {
     }
 }
 
-void MemBroker::SetInitPositions(MemGetTradePositionMessage* rep, int64_t type) {
+void MemBroker::InitPositions(MemGetTradePositionMessage* rep, int64_t type) {
     if (type == co::kTradeTypeSpot) {
-        inner_option_master_.SetInitPositions(rep);
+        inner_option_master_.InitPositions(rep);
     } else if (type == co::kTradeTypeOption) {
-        inner_stock_master_.SetInitPositions(rep);
+        inner_stock_master_.InitPositions(rep);
     }
 }
 
@@ -127,7 +127,7 @@ void MemBroker::SendTradeOrder(MemTradeOrderMessage* req) {
             int64_t oc_flag = order->oc_flag;
             if (trade_type == kTradeTypeSpot && enable_stock_short_selling_) {
                 // 处理信用账户自动融券逻辑
-                order->oc_flag = inner_stock_master_.GetOcFlag(req->bs_flag, *order);
+                order->oc_flag = inner_stock_master_.GetAutoOcFlag(req->bs_flag, *order);
                 inner_stock_master_.HandleOrderReq(req->bs_flag, *order);
             } else if (trade_type == kTradeTypeOption) {
                 // 处理期权自动开平仓逻辑：获取自动开平仓标记
@@ -176,7 +176,7 @@ void MemBroker::SendRtnMessage(const std::string& raw, int64_t type) {
     server_->SendRtnMessage(raw, type);
 }
 
-void MemBroker::SendTradeOrderRep(MemTradeOrderMessage* rep) {
+void MemBroker::HandleTradeOrderRep(MemTradeOrderMessage* rep) {
     auto itr = accounts_.find(rep->fund_id);
     if (itr != accounts_.end()) {
         auto account = &itr->second;
@@ -196,7 +196,7 @@ void MemBroker::SendTradeOrderRep(MemTradeOrderMessage* rep) {
     }
 }
 
-void MemBroker::SendTradeKnock(MemTradeKnock* knock) {
+void MemBroker::HandleTradeKnock(MemTradeKnock* knock) {
     auto itr = accounts_.find(knock->fund_id);
     if (itr != accounts_.end()) {
         auto account = &itr->second;

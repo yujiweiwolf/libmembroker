@@ -18,14 +18,14 @@ class MemBroker {
     virtual ~MemBroker();
 
     void Init(const MemBrokerOptions& opt, MemBrokerServer* server);
+    void AddT0Code(const string& code);
 
     const std::map<string, MemTradeAccount>& GetAccounts() const;
     co::MemTradeAccount* GetAccount(const string& fund_id);
     bool ExitAccount(const string& fund_id);
     void AddAccount(const co::MemTradeAccount& account);
 
-    void AddT0Code(const string& code);
-
+    // 查询和报撤单请求
     void SendQueryTradeAsset(MemGetTradeAssetMessage* req);
     void SendQueryTradePosition(MemGetTradePositionMessage* req);
     void SendQueryTradeKnock(MemGetTradeKnockMessage* req);
@@ -34,15 +34,13 @@ class MemBroker {
 
     void SendRtnMessage(const std::string& raw, int64_t type);
 
-    void SetInitPositions(MemGetTradePositionMessage* rep, int64_t type);
-
-    void SendTradeOrderRep(MemTradeOrderMessage* rep);
-
-    // 自动开平，计算持仓
-    void SendTradeKnock(MemTradeKnock* knock);
-
     // 自动开平， 启始化时查询持仓
     void OnStart();
+    void InitPositions(MemGetTradePositionMessage* rep, int64_t type);
+
+    // 自动开平，计算持仓
+    void HandleTradeOrderRep(MemTradeOrderMessage* rep);
+    void HandleTradeKnock(MemTradeKnock* knock);
 
  protected:
     virtual void OnInit();

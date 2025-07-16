@@ -1,4 +1,4 @@
-// Copyright 2021 Fancapital Inc.  All rights reserved.
+// Copyright 2025 Fancapital Inc.  All rights reserved.
 #pragma once
 #include <thread>
 #include <map>
@@ -50,11 +50,8 @@ typedef std::shared_ptr<InnerOptionPosition> InnerOptionPositionPtr;
 class InnerOptionMaster {
  public:
     InnerOptionMaster() = default;
-
-    // 清空持仓，用于断线重连后重新初始化
-    void Clear();
     // 更新初始持仓
-    void SetInitPositions(MemGetTradePositionMessage* rep);
+    void InitPositions(MemGetTradePositionMessage* rep);
     // 更新委托和成交
     void HandleOrderReq(int64_t bs_flag, const MemTradeOrder& order);
     void HandleOrderRep(int64_t bs_flag, const MemTradeOrder& order);
