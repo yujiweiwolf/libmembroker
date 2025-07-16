@@ -2,32 +2,29 @@
 #include "inner_stock_master.h"
 
 namespace co {
-    InnerStockMaster::InnerStockMaster() {
-    }
-
-    void InnerStockMaster::Clear() {
-        positions_.clear();
-    }
-
     void InnerStockMaster::AddT0Code(const string& code) {
         t0_list_.insert(code);
         LOG_INFO << "T+0 code: " << code;
     }
 
-    // T+0的合约，type须设置为1， 不管其有没有持仓
     void InnerStockMaster::SetInitPositions(MemGetTradePositionMessage* rep) {
         LOG_INFO << "set init stock position";
+        init_flag_ = true;
         if (rep->items_size > 0) {
             auto first = (MemTradePosition*)((char*)rep + sizeof(MemGetTradePositionMessage));
             for (int i = 0; i < rep->items_size; i++) {
                 MemTradePosition *position = first + i;
                 string code = position->code;
-                InnerStockPositionPtr pos = GetOrCreatePosition(code);
+                InnerStockPositionPtr pos = GetPosition(code);
                 // 普通卖的总额度
-                pos->total_sell_volume_ = position->long_can_close;
+                pos->init_sell_volume_ = position->long_can_close;
                 // 融券卖的总额度
-                pos->total_borrowed_volume_ = position->short_can_open;
+                pos->init_borrowed_volume_ = position->short_can_open;
             }
+        }
+        LOG_INFO << "[AutoOpenClose] OnInit";
+        for (auto it : positions_) {
+            LOG_INFO << it.first << ", " << it.second->ToString();
         }
     }
 
@@ -45,7 +42,7 @@ namespace co {
         if (!IsAccountInitialized()) {
             return;
         }
-        InnerStockPositionPtr pos = GetOrCreatePosition(code);
+        InnerStockPositionPtr pos = GetPosition(code);
         if (order.oc_flag == kOcFlagAuto && bs_flag == kBsFlagBuy) {
             // 委托类型：正常买入
             pos->buying_volume_ += order.volume;
@@ -59,7 +56,7 @@ namespace co {
             // 委托类型：买券还券
             pos->returning_volume_ += order.volume;
         }
-        LOG_INFO << __FUNCTION__ << "  " << pos->ToString();
+        LOG_INFO << "HandleOrderReq, " << pos->ToString();
     }
 
     void InnerStockMaster::HandleOrderRep(int64_t bs_flag, const MemTradeOrder& order) {
@@ -72,7 +69,7 @@ namespace co {
         if (!IsAccountInitialized()) {
             return;
         }
-        InnerStockPositionPtr pos = GetOrCreatePosition(code);
+        InnerStockPositionPtr pos = GetPosition(code);
         if (order.oc_flag == kOcFlagAuto && bs_flag == kBsFlagBuy) {
             // 委托类型：正常买入
             if (order.volume <= pos->buying_volume_) {
@@ -81,7 +78,7 @@ namespace co {
         } else if (order.oc_flag == kOcFlagAuto && bs_flag == kBsFlagSell) {
             // 委托类型：正常卖出
             if (order.volume <= pos->selling_volume_) {
-                pos->selling_volume_ = order.volume;
+                pos->selling_volume_ -= order.volume;
             }
         } else if (order.oc_flag == kOcFlagOpen && bs_flag == kBsFlagSell) {
             // 委托类型：融券卖出
@@ -94,34 +91,34 @@ namespace co {
                 pos->returning_volume_ -= order.volume;
             }
         }
-        LOG_INFO << __FUNCTION__ << "  " << pos->ToString();
+        LOG_INFO << "HandleOrderRep, " << pos->ToString();
     }
 
-    void InnerStockMaster::HandleKnock(const MemTradeKnock* knock) {
-        std::string fund_id = knock->fund_id;
-        std::string inner_match_no = knock->inner_match_no;
-        std::string code = knock->code;
-        int64_t bs_flag = knock->bs_flag;
-        int64_t oc_flag = knock->oc_flag;
-        int64_t match_type = knock->match_type;
+    void InnerStockMaster::HandleKnock(const MemTradeKnock& knock) {
+        std::string fund_id = knock.fund_id;
+        std::string inner_match_no = knock.inner_match_no;
+        std::string code = knock.code;
+        int64_t bs_flag = knock.bs_flag;
+        int64_t oc_flag = knock.oc_flag;
+        int64_t match_type = knock.match_type;
         if (fund_id.empty() || inner_match_no.empty() || code.empty()) {
             return;
         }
         if (bs_flag != kBsFlagBuy && bs_flag != kBsFlagSell) {
             return;
         }
-        if (knock->match_volume <= 0) {
+        if (knock.match_volume <= 0) {
             return;
         }
         if (!IsAccountInitialized()) {
-            return;  // 没有初始化该资金账号的持仓，忽略
+            return;
         }
         if (auto it = knocks_.find(inner_match_no); it != knocks_.end()) {
             return;
         }
         knocks_.insert(inner_match_no);
-        int64_t match_volume = knock->match_volume;
-        InnerStockPositionPtr pos = GetOrCreatePosition(code);
+        int64_t match_volume = knock.match_volume;
+        InnerStockPositionPtr pos = GetPosition(code);
         if (match_type == co::kMatchTypeOK) {
             if (oc_flag == kOcFlagAuto && bs_flag == kBsFlagBuy) {
                 pos->bought_volume_ += match_volume;
@@ -147,7 +144,7 @@ namespace co {
                 pos->returning_volume_ -= match_volume;
             }
         }
-        LOG_INFO << __FUNCTION__ << "  " << pos->ToString();
+        LOG_INFO << "HandleKnock, " << pos->ToString();
     }
 
     int64_t InnerStockMaster::GetOcFlag(int64_t bs_flag, const MemTradeOrder& order) {
@@ -160,33 +157,34 @@ namespace co {
             return kOcFlagAuto;  // 没有初始化该资金账号的持仓，直接返回普通卖出
         }
 
-        InnerStockPositionPtr pos = GetOrCreatePosition(order.code);
+        InnerStockPositionPtr pos = GetPosition(order.code);
         bool t0_flag = IsT0Type(order.code);
         if (t0_flag) {
             // T + 0的品种， 当日买成交数据须统计
-            if (order.volume <= (pos->bought_volume_ + pos->total_sell_volume_ - pos->selling_volume_ - pos->sold_volume_)) {
+            if (order.volume <= (pos->bought_volume_ + pos->init_sell_volume_ - pos->selling_volume_ - pos->sold_volume_)) {
                 oc_flag = kOcFlagAuto;
             } else {
                 oc_flag = kOcFlagOpen;
             }
         } else {
-            if (order.volume <= (pos->total_sell_volume_ - pos->selling_volume_ - pos->sold_volume_)) {
+            if (order.volume <= (pos->init_sell_volume_ - pos->selling_volume_ - pos->sold_volume_)) {
                 oc_flag = kOcFlagAuto;
             } else {
                 oc_flag = kOcFlagOpen;
             }
         }
-        LOG_INFO << __FUNCTION__ << ", oc_flag: " << oc_flag << ", " << pos->ToString();
+        LOG_INFO << "[GetOcFlag]["
+                 << order.code << ", bs_flag: " << bs_flag << ", order_volume: " << order.volume
+                 << "] oc_flag: " << oc_flag << ", " << pos->ToString();
         return oc_flag;
     }
 
     bool InnerStockMaster::IsAccountInitialized() {
-        return true;
+        return init_flag_;
     }
 
-    InnerStockPositionPtr InnerStockMaster::GetOrCreatePosition(std::string code) {
+    InnerStockPositionPtr InnerStockMaster::GetPosition(std::string code) {
         InnerStockPositionPtr pos = nullptr;
-        std::shared_ptr<std::map<std::string, InnerStockPositionPtr>> all = nullptr;
         auto it = positions_.find(code);
         if (it != positions_.end()) {
             pos = it->second;

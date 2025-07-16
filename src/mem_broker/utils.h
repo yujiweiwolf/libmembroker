@@ -1,7 +1,8 @@
 #pragma once
 
 #include <string>
-
+#include <random>
+#include <algorithm>
 #include "x/x.h"
 #include "coral/coral.h"
 
@@ -24,23 +25,6 @@ namespace co {
     std::string CheckTradeOrderMessage(MemTradeOrderMessage *req, int sh_th_tps_limit, int sz_th_tps_limit);
     std::string CheckTradeWithdrawMessage(MemTradeWithdrawMessage *req, int64_t trade_type);
 
-    void Fix(co::fbs::TradeAssetT* asset);
-    void Fix(co::fbs::TradePositionT* position);
-    void Fix(co::fbs::TradeKnockT* knock);
-    void Validate(const co::fbs::TradeAssetT& asset);
-    void Validate(const co::fbs::TradePositionT& position);
-    void Validate(const co::fbs::TradeKnockT& knock);
-
-	int64_t FixTimestamp(const int64_t& timestamp);
-
-    std::string CreateHeartbeatMessage();
-
-    std::string CreateFrame(const int64_t& function_id, const std::string& raw, char compress_algo);
-    int64_t ParseFunctionIDFromFrame(const std::string& frame);
-
-    void SetTraceReqBegin(flatbuffers::Vector<int64_t>* traces, int64_t ns);
-    void SetTraceReqEnd(flatbuffers::Vector<int64_t>* traces, int64_t ns);
-    void SetTraceRepBegin(flatbuffers::Vector<int64_t>* traces, int64_t ns);
-    void SetTraceRepEnd(flatbuffers::Vector<int64_t>* traces, int64_t ns, int64_t* req, int64_t* rep, int64_t* out);
+    std::string GenerateRandomString(size_t length);
 
 }

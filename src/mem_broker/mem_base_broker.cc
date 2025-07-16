@@ -201,9 +201,9 @@ void MemBroker::SendTradeKnock(MemTradeKnock* knock) {
     if (itr != accounts_.end()) {
         auto account = &itr->second;
         if (account->type == kTradeTypeSpot && enable_stock_short_selling_) {
-            inner_stock_master_.HandleKnock(knock);
+            inner_stock_master_.HandleKnock(*knock);
         } else if (account->type == kTradeTypeOption) {
-            inner_option_master_.HandleKnock(knock);
+            inner_option_master_.HandleKnock(*knock);
         }
     }
 }
