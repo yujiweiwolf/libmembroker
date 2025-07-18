@@ -49,7 +49,7 @@ target_link_libraries(send_req
 #aux_source_directory (src/gtest/test_membroker TESTBROKER)
 #add_executable(gtest_broker ${TESTBROKER})
 # test_unit.cc test_option_master.cc test_stock_master.cc
-add_executable(gtest_broker src/gtest/test_membroker/test_option_master.cc src/gtest/test_membroker/test_stock_master.cc)
+add_executable(gtest_broker src/gtest/test_membroker/test_future_master.cc)
 target_link_libraries(gtest_broker
         gtest gtest_main membroker coral swordfish x stdc++fs yaml-cpp  clickhouse-cpp-lib-static boost_date_time boost_filesystem boost_regex boost_system  boost_chrono boost_log boost_program_options boost_thread boost_iostreams z protobuf protobuf-lite sodium zmq ssl crypto iconv pthread dl)
 

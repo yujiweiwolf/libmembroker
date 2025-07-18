@@ -37,8 +37,6 @@ class MemBroker {
     // 自动开平， 启始化时查询持仓
     void OnStart();
     void InitPositions(MemGetTradePositionMessage* rep, int64_t type);
-
-    // 自动开平，计算持仓
     void HandleTradeOrderRep(MemTradeOrderMessage* rep);
     void HandleTradeKnock(MemTradeKnock* knock);
 

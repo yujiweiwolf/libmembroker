@@ -70,9 +70,6 @@ void InnerOptionMaster::HandleOrderRep(int64_t bs_flag, const MemTradeOrder& ord
     if (bs_flag != kBsFlagBuy && bs_flag != kBsFlagSell) {
         return;
     }
-    if (oc_flag != kOcFlagOpen && oc_flag != kOcFlagClose) {
-        return;
-    }
     if (!IsAccountInitialized()) {
         return;
     }

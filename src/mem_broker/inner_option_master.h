@@ -64,7 +64,6 @@ class InnerOptionMaster {
     bool IsAccountInitialized();
     void Update(InnerOptionPositionPtr pos, int64_t oc_flag, int64_t order_volume, int64_t match_volume, int64_t withdraw_volume);
 
-
  private:
     bool init_flag_ = false;
     std::map<std::string, std::shared_ptr<std::pair<InnerOptionPositionPtr, InnerOptionPositionPtr>>> positions_;  // <code> -> first is buy, second is sell
