@@ -100,6 +100,8 @@ void MemBroker::InitPositions(MemGetTradePositionMessage* rep, int64_t type) {
         inner_option_master_.InitPositions(rep);
     } else if (type == co::kTradeTypeOption) {
         inner_stock_master_.InitPositions(rep);
+    } else if (type == co::kTradeTypeFuture) {
+        inner_future_master_.InitPositions(rep);
     }
 }
 
@@ -135,6 +137,12 @@ void MemBroker::SendTradeOrder(MemTradeOrderMessage* req) {
                     order->oc_flag = inner_option_master_.GetAutoOcFlag(req->bs_flag, *order);
                 }
                 inner_option_master_.HandleOrderReq(req->bs_flag, *order);
+            } else if (trade_type == kTradeTypeFuture) {
+                // 处理期货自动开平仓逻辑：获取自动开平仓标记
+                if (oc_flag == kOcFlagAuto) {
+                    order->oc_flag = inner_future_master_.GetAutoOcFlag(req->bs_flag, *order);
+                }
+                inner_future_master_.HandleOrderReq(req->bs_flag, *order);
             }
         }
         OnTradeOrder(req);
@@ -192,6 +200,12 @@ void MemBroker::HandleTradeOrderRep(MemTradeOrderMessage* rep) {
                 MemTradeOrder* order = items + i;
                 inner_option_master_.HandleOrderRep(rep->bs_flag, *order);
             }
+        } else if (account->type == kTradeTypeFuture) {
+            MemTradeOrder* items = rep->items;
+            for (int i = 0; i < rep->items_size; i++) {
+                MemTradeOrder* order = items + i;
+                inner_future_master_.HandleOrderRep(rep->bs_flag, *order);
+            }
         }
     }
 }
@@ -204,6 +218,8 @@ void MemBroker::HandleTradeKnock(MemTradeKnock* knock) {
             inner_stock_master_.HandleKnock(*knock);
         } else if (account->type == kTradeTypeOption) {
             inner_option_master_.HandleKnock(*knock);
+        } else if (account->type == kTradeTypeFuture) {
+            inner_future_master_.HandleKnock(*knock);
         }
     }
 }

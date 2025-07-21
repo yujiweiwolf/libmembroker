@@ -1,10 +1,42 @@
 // Copyright 2025 Fancapital Inc.  All rights reserved.
-constexpr int kCFFEXOptionLength = 14;
+
+#include "yaml-cpp/yaml.h"
 #include "inner_future_master.h"
+constexpr int kCFFEXOptionLength = 14;
 
 namespace co {
+void InnerFutureMaster::InitCffexParam() {
+    auto getBool = [&](const YAML::Node& node, const std::string& name) {
+        try {
+            return node[name] && !node[name].IsNull() ? node[name].as<bool>() : false;
+        } catch (std::exception& e) {
+            LOG_ERROR << "load configuration failed: name = " << name << ", error = " << e.what();
+            throw std::runtime_error(e.what());
+        }
+    };
+    auto getInt = [&](const YAML::Node& node, const std::string& name, const int64_t& default_value = 0) {
+        try {
+            return node[name] && !node[name].IsNull() ? node[name].as<int64_t>() : default_value;
+        } catch (std::exception& e) {
+            LOG_ERROR << "load configuration failed: name = " << name << ", error = " << e.what();
+            throw std::runtime_error(e.what());
+        }
+    };
+    try {
+        auto filename = x::FindFile("broker.yaml");
+        YAML::Node root = YAML::LoadFile(filename);
+        auto param = root["cffex"];
+        forbid_closing_today_ = getBool(param, "forbid_closing_today");
+        max_today_opening_volume_ = getInt(param, "max_today_opening_volume");
+        LOG_INFO << "股指特定参数 forbid_closing_today: " << forbid_closing_today_ << ", max_today_opening_volume: " << max_today_opening_volume_;
+    } catch (std::exception& e) {
+        LOG_ERROR << "InitCffexParam, " << e.what();
+    }
+}
+
 void InnerFutureMaster::InitPositions(MemGetTradePositionMessage* rep) {
     LOG_INFO << "set init future position";
+    InitCffexParam();
     positions_.clear();
     open_cache_.insert(std::make_pair("IF", 0));
     open_cache_.insert(std::make_pair("IH", 0));
@@ -20,6 +52,20 @@ void InnerFutureMaster::InitPositions(MemGetTradePositionMessage* rep) {
             InnerFuturePositionPtr short_pos = GetPosition(code, kBsFlagSell, kOcFlagOpen);
             long_pos->yd_init_volume_ = position->long_pre_volume;
             long_pos->td_init_volume_ = position->long_volume - position->long_pre_volume;
+            short_pos->yd_init_volume_ = position->short_pre_volume;
+            short_pos->td_init_volume_ = position->short_volume - position->short_pre_volume;
+            if (long_pos->marker_ == kMarketCFFEX && long_pos->td_init_volume_) {
+                string type = code.length() > 2 ? code.substr(0, 2) : "";
+                if (auto it = open_cache_.find(type); it != open_cache_.end()) {
+                    it->second += long_pos->td_init_volume_;
+                }
+            }
+            if (short_pos->marker_ == kMarketCFFEX && short_pos->td_init_volume_) {
+                string type = code.length() > 2 ? code.substr(0, 2) : "";
+                if (auto it = open_cache_.find(type); it != open_cache_.end()) {
+                    it->second += short_pos->td_init_volume_;
+                }
+            }
         }
     }
     init_flag_ = true;
@@ -168,6 +214,22 @@ void InnerFutureMaster::Update(InnerFuturePositionPtr pos, int64_t oc_flag, int6
                 pos->td_opening_volume_ -= withdraw_volume;
             }
         }
+        // 风控策略：更新当前期货类型的已开仓数和开仓冻结数之和
+        if (forbid_closing_today_ && pos->marker_ == co::kMarketCFFEX) {
+            string code = pos->code_;
+            if (code.length() > kCFFEXOptionLength) {
+                return;
+            }
+            string type = code.length() > 2 ? code.substr(0, 2) : "";
+            if (auto it = open_cache_.find(type); it != open_cache_.end()) {
+                if (order_volume > 0) {
+                    it->second += order_volume;
+                }
+                if (withdraw_volume > 0) {
+                    it->second -= order_volume;
+                }
+            }
+        }
         break;
     case kOcFlagClose:  // 平仓
     case kOcFlagForceClose:  // 强平
@@ -260,22 +322,6 @@ void InnerFutureMaster::Update(InnerFuturePositionPtr pos, int64_t oc_flag, int6
     default:
         break;
     }
-    // 风控策略：更新当前期货类型的已开仓数和开仓冻结数之和
-    string code = pos->code_;
-    if (code.length() > kCFFEXOptionLength) {
-        return;
-    }
-    if (risk_forbid_closing_today_ && oc_flag == kOcFlagOpen) {
-        string type = code.length() > 2 ? code.substr(0, 2) : "";
-        if (auto it = open_cache_.find(type); it != open_cache_.end()) {
-            if (order_volume > 0) {
-                it->second += order_volume;
-            }
-            if (withdraw_volume > 0) {
-                it->second -= order_volume;
-            }
-        }
-    }
 }
 
 int64_t InnerFutureMaster::GetAutoOcFlag(int64_t bs_flag, const MemTradeOrder& order) {
@@ -302,30 +348,31 @@ int64_t InnerFutureMaster::GetAutoOcFlag(int64_t bs_flag, const MemTradeOrder& o
     if (bs_flag == kBsFlagBuy) {
         pos = itr_acc->second->second;  // 买时，先找到对应的空头
     } else {
-        pos = itr_acc->second->first;
+        pos = itr_acc->second->first;   // 卖时，先找到对应的多头
     }
 
     int64_t market = pos->marker_;
-    int64_t yd_available_pos = pos->yd_init_volume_ + pos->yd_close_volume_ - pos->yd_closing_volume_;
-    int64_t td_available_pos = pos->td_init_volume_ + pos->td_open_volume_ - pos->td_close_volume_ - pos->td_closing_volume_;
+    int64_t yd_available_pos = pos->GetYesterdayAvailableVolume();
+    int64_t td_available_pos = pos->GetTodayAvailableVolume();
     if (market == co::kMarketSHFE || market == co::kMarketINE) {
         if (yd_available_pos >= order_volume) {
             ret_oc_flag = kOcFlagCloseYesterday;
         } else if (td_available_pos > order_volume) {
-            ret_oc_flag = kOcFlagCloseToday; // kOcFlagClose
+            ret_oc_flag = kOcFlagCloseToday; // 也可以是 kOcFlagClose
         }
     } else if (market == co::kMarketCFFEX) {
-        auto it = open_cache_.find(code);
-        if (it != open_cache_.end()) {
+        string type = code.length() > 2 ? code.substr(0, 2) : "";
+        auto it = open_cache_.find(type);
+        if (it->second == 0) {
             if (yd_available_pos >= order_volume) {
                 ret_oc_flag = kOcFlagClose;
             }
         } else {
-            LOG_INFO << "股指代码: " << order.code << " 今天开过仓, 只能开仓, 不能平仓";
+            LOG_INFO << "股指代码: " << order.code << ", 品种: " << type << ", 今仓手数: " << it->second << ", 只能开仓, 不能平仓";
         }
     } else {
         if ((yd_available_pos + td_available_pos) >= order_volume) {
-            ret_oc_flag = kOcFlagCloseYesterday;
+            ret_oc_flag = kOcFlagClose;
         }
     }
     LOG_INFO << "[AutoOpenClose]["
@@ -361,8 +408,9 @@ int64_t InnerFutureMaster::GetCloseYesterdayFlag(int64_t bs_flag, const MemTrade
             ret_oc_flag = kOcFlagCloseYesterday;
         }
     } else if (market == co::kMarketCFFEX) {
-        auto it = open_cache_.find(code);
-        if (it != open_cache_.end()) {
+        string type = code.length() > 2 ? code.substr(0, 2) : "";
+        auto it = open_cache_.find(type);
+        if (it->second == 0) {
             if (yd_available_pos >= order_volume) {
                 ret_oc_flag = kOcFlagClose;
             }
@@ -382,16 +430,16 @@ void InnerFutureMaster::CheckRisk(string code, int64_t bs_flag, int64_t oc_flag,
         return;
     }
     // 风控策略：限制股指期货当日开仓数量
-    if (risk_max_today_opening_volume_ >= 0 && oc_flag == kOcFlagOpen) {
+    if (max_today_opening_volume_ >= 0 && oc_flag == kOcFlagOpen) {
         string type = code.length() > 2 ? code.substr(0, 2) : "";
         int64_t open_volume = 0; // 当前期货类型的已开仓数和开仓冻结数之和
         auto it = open_cache_.find(type);
         if (it != open_cache_.end()) {
             open_volume = it->second;
         }
-        if (order_volume + open_volume > risk_max_today_opening_volume_) {
+        if (order_volume + open_volume > max_today_opening_volume_) {
             stringstream ss;
-            ss << "[开仓数限制]风控检查失败，委托数:" << order_volume << "，已开仓:" << open_volume << "，最大开仓数限制:" << risk_max_today_opening_volume_;
+            ss << "[开仓数限制]风控检查失败，委托数:" << order_volume << "，已开仓:" << open_volume << "，最大开仓数限制:" << max_today_opening_volume_;
             string str = ss.str();
             throw runtime_error(str);
         }

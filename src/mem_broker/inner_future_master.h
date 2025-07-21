@@ -73,6 +73,7 @@ class InnerFutureMaster {
     InnerFuturePositionPtr GetPosition(std::string code, int64_t bs_flag, int64_t oc_flag);
 
  protected:
+    void InitCffexParam();
     bool IsAccountInitialized();
     void Update(InnerFuturePositionPtr pos, int64_t oc_flag, int64_t order_volume, int64_t match_volume, int64_t withdraw_volume);
     void CheckRisk(string code, int64_t bs_flag, int64_t oc_flag, int64_t order_volume);
@@ -82,9 +83,9 @@ class InnerFutureMaster {
     std::map<std::string, std::shared_ptr<std::pair<InnerFuturePositionPtr, InnerFuturePositionPtr>>> positions_;  // <code> -> first is buy, second is sell
     std::set<std::string> knocks_;  // <inner_match_no>
 
-    bool risk_forbid_closing_today_ = false;  // 风控策略：禁止股指期货自动开平仓时平今仓
-    int64_t risk_max_today_opening_volume_ = 0;  // 风控策略：限制股指期货当日最大开仓数
-    map<string, int64_t> open_cache_;  // 合约类型（IF、IH、IC） -> 已开仓数 + 开仓冻结数，用于限制当日最大开仓数
+    bool forbid_closing_today_ = false;  // 风控策略：禁止股指期货自动开平仓时平今仓
+    int64_t max_today_opening_volume_ = 0;  // 风控策略：限制股指期货当日最大开仓数
+    std::map<string, int64_t> open_cache_;  // 合约类型（IF、IH、IC） -> 已开仓数 + 开仓冻结数，用于限制当日最大开仓数
 };
 typedef std::shared_ptr<InnerFutureMaster> InnerFutureMasterPtr;
 }  // namespace co

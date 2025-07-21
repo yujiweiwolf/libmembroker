@@ -156,12 +156,15 @@ void MemBrokerServer::OnStart() {
     const auto& accounts = broker_->GetAccounts();
     std::vector<std::string> stock_fund_ids;
     std::vector<std::string> option_fund_ids;
+    std::vector<std::string> future_fund_ids;
     for (auto& itr : accounts) {
         auto acc = itr.second;
         if (acc.type == kTradeTypeSpot) {
             stock_fund_ids.push_back(acc.fund_id);
         } else if (acc.type == kTradeTypeOption) {
             option_fund_ids.push_back(acc.fund_id);
+        } else if (acc.type == kTradeTypeFuture) {
+            future_fund_ids.push_back(acc.fund_id);
         }
     }
 
@@ -187,6 +190,21 @@ void MemBrokerServer::OnStart() {
             char buffer[sizeof(MemGetTradePositionMessage)] = "";
             MemGetTradePositionMessage* req = (MemGetTradePositionMessage*)buffer;
             string id = "INIT_OPTION_" + x::UUID();
+            req->timestamp = x::RawDateTime();
+            strncpy(req->id, id.c_str(), id.length());
+            strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
+            queue_->Push(nullptr, kMemTypeQueryTradePositionReq,
+                         string(static_cast<const char*>(buffer), sizeof(MemGetTradePositionMessage)));
+        }
+    }
+
+    if (!future_fund_ids.empty()) {
+        for (auto& it : future_fund_ids) {
+            std::string& fund_id = it;
+            LOG_INFO << "query future init position: fund_id = " << fund_id << " ...";
+            char buffer[sizeof(MemGetTradePositionMessage)] = "";
+            MemGetTradePositionMessage* req = (MemGetTradePositionMessage*)buffer;
+            string id = "INIT_FUTURE_" + x::UUID();
             req->timestamp = x::RawDateTime();
             strncpy(req->id, id.c_str(), id.length());
             strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
@@ -622,6 +640,9 @@ void MemBrokerServer::SendQueryTradePositionRep(MemGetTradePositionMessage* rep)
         broker_->InitPositions(rep, kTradeTypeOption);
         return;
     } else if (x::StartsWith(id, "INIT_STOCK_")) {
+        broker_->InitPositions(rep, kTradeTypeSpot);
+        return;
+    } else if (x::StartsWith(id, "INIT_FUTURE_")) {
         broker_->InitPositions(rep, kTradeTypeSpot);
         return;
     }

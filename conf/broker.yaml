@@ -49,6 +49,12 @@ risk:
     }
   feeder_dir: ../data
 
+cffex:
+  # 股指期货自动开平仓时禁止平今
+  forbid_closing_today: true
+  # 股指期货每日最大开仓数限制（0-禁止开仓，-1：无限制）
+  max_today_opening_volume: 20
+
 log:
   level: trace
   async: false
