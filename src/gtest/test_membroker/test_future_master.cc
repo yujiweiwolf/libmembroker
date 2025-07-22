@@ -8,7 +8,6 @@ using namespace co;
 TEST(InnerFutureMaster, TestSHFE) {
     string fund_id = "S1";
     string code = "cu2508.SHFE";
-    // string code = "sc2508.INE";
     string id = x::UUID();
     int total_pos_num = 1;
     int long_volume = 8;
@@ -775,6 +774,7 @@ TEST(InnerFutureMaster, TestCZCEOrder) {
 // 4 卖2手, 开，成交
 // 5 买2手, 开, 锁仓
 // 6 此时还有一手昨仓, 卖1手, 已开过仓，不允许继续平仓，只能继续开仓
+// 7 此时已开仓5手, 换个合约报16手会禁止开仓
 
 TEST(InnerFutureMaster, TestCFFEXEOrder) {
     string fund_id = "S1";
@@ -1057,5 +1057,24 @@ TEST(InnerFutureMaster, TestCFFEXEOrder) {
         InnerFuturePositionPtr long_pos = master.GetPosition(order.code, kBsFlagBuy, kOcFlagOpen);
         EXPECT_EQ(long_pos->td_open_volume_, 2);
         EXPECT_EQ(long_pos->GetYesterdayAvailableVolume(), 1);  // 此时还有一手昨仓
+    }
+
+    // 7 此时已开仓5手, 换个合约报16手会禁止开仓
+    {
+        LOG_INFO << "流程7 此时已开仓5手, 换个合约报16手会禁止开仓";
+//        string order_no = CreateStandardOrderNo(kMarketSHFE, GenerateRandomString(3));
+//        string match_no = "FUTURE_" + GenerateRandomString(5);
+//        LOG_INFO << "order_no: " << order_no << ", match_no: " << match_no << " ------------------------";
+        string code = "IF2509.CFFEX";
+        int order_volume = 16;
+        int64_t bs_flag = co::kBsFlagSell;
+        MemTradeOrder order {};
+        strcpy(order.code, code.c_str());
+        order.volume = order_volume;
+        order.price = 9.9;
+        int64_t oc_flag = master.GetAutoOcFlag(bs_flag, order);
+        EXPECT_EQ(oc_flag, co::kOcFlagOpen);
+        order.oc_flag = oc_flag;
+        master.HandleOrderReq(bs_flag, order);
     }
 }

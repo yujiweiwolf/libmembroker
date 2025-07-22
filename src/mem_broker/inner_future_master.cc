@@ -93,6 +93,7 @@ void InnerFutureMaster::HandleOrderReq(int64_t bs_flag, const MemTradeOrder& ord
     if (!IsAccountInitialized()) {
         return;
     }
+    CheckRisk(order.code, bs_flag, order.oc_flag, order.volume);
 
     InnerFuturePositionPtr pos = GetPosition(code, bs_flag, oc_flag);
     if (pos) {
@@ -425,7 +426,7 @@ int64_t InnerFutureMaster::GetCloseYesterdayFlag(int64_t bs_flag, const MemTrade
     return ret_oc_flag;
 }
 
-void InnerFutureMaster::CheckRisk(string code, int64_t bs_flag, int64_t oc_flag, int64_t order_volume) {
+void InnerFutureMaster::CheckRisk(const string& code, int64_t bs_flag, int64_t oc_flag, int64_t order_volume) {
     if (code.length() > kCFFEXOptionLength) {
         return;
     }
