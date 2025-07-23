@@ -643,7 +643,7 @@ void MemBrokerServer::SendQueryTradePositionRep(MemGetTradePositionMessage* rep)
         broker_->InitPositions(rep, kTradeTypeSpot);
         return;
     } else if (x::StartsWith(id, "INIT_FUTURE_")) {
-        broker_->InitPositions(rep, kTradeTypeSpot);
+        broker_->InitPositions(rep, kTradeTypeFuture);
         return;
     }
     wait_size_--;

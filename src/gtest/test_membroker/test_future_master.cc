@@ -1060,11 +1060,8 @@ TEST(InnerFutureMaster, TestCFFEXEOrder) {
     }
 
     // 7 此时已开仓5手, 换个合约报16手会禁止开仓
-    {
+    try {
         LOG_INFO << "流程7 此时已开仓5手, 换个合约报16手会禁止开仓";
-//        string order_no = CreateStandardOrderNo(kMarketSHFE, GenerateRandomString(3));
-//        string match_no = "FUTURE_" + GenerateRandomString(5);
-//        LOG_INFO << "order_no: " << order_no << ", match_no: " << match_no << " ------------------------";
         string code = "IF2509.CFFEX";
         int order_volume = 16;
         int64_t bs_flag = co::kBsFlagSell;
@@ -1073,8 +1070,130 @@ TEST(InnerFutureMaster, TestCFFEXEOrder) {
         order.volume = order_volume;
         order.price = 9.9;
         int64_t oc_flag = master.GetAutoOcFlag(bs_flag, order);
+    } catch (std::exception& e) {
+        string error = e.what();
+        EXPECT_TRUE(x::StartsWith(error, "[当日开仓数限制]"));
+    }
+
+    //流程8 卖平2手，转化为卖开2手
+    {
+        int total_pos_num = 1;
+        int long_volume = 6;
+        int long_pre_volume = 3;
+
+        // 0 初始化, 昨仓3手, 今仓3手
+        int length = sizeof(MemGetTradePositionMessage) + sizeof(MemTradePosition) * total_pos_num;
+        char buffer[length] = "";
+        MemGetTradePositionMessage *msg = (MemGetTradePositionMessage *) buffer;
+        strncpy(msg->id, id.c_str(), id.length());
+        strcpy(msg->fund_id, fund_id.c_str());
+        msg->items_size = total_pos_num;
+        for (int i = 0; i < total_pos_num; i++) {
+            MemTradePosition *pos = msg->items + i;
+            strcpy(pos->code, code.c_str());
+            pos->long_volume = long_volume;
+            pos->long_pre_volume = long_pre_volume;
+        }
+        InnerFutureMaster master;
+        master.InitPositions(msg);
+
+        LOG_INFO << "流程8 卖平2手，转化为卖开2手";
+        int order_volume = 2;
+        int64_t bs_flag = co::kBsFlagSell;
+        MemTradeOrder order {};
+        strcpy(order.code, code.c_str());
+        order.oc_flag = kOcFlagClose;
+        order.volume = order_volume;
+        order.price = 9.9;
+        int64_t oc_flag = master.GetAutoOcFlag(bs_flag, order);
         EXPECT_EQ(oc_flag, co::kOcFlagOpen);
-        order.oc_flag = oc_flag;
-        master.HandleOrderReq(bs_flag, order);
+    }
+}
+
+// 卖平2手，转化为卖开2手
+TEST(InnerFutureMaster, TestGetCloseYesterdayFlag) {
+    string fund_id = "S1";
+    string code_0 = "IF2508.CFFEX";
+    string code_1 = "cu2508.SHFE";
+    string code_2 = "m2509.DCE";
+    string id = x::UUID();
+    int total_pos_num = 3;
+    int long_volume = 20;
+    int long_pre_volume = 10;
+
+    // 初始化, 昨仓10手, 今仓10手
+    int length = sizeof(MemGetTradePositionMessage) + sizeof(MemTradePosition) * total_pos_num;
+    char buffer[length] = "";
+    MemGetTradePositionMessage *msg = (MemGetTradePositionMessage *) buffer;
+    strncpy(msg->id, id.c_str(), id.length());
+    strcpy(msg->fund_id, fund_id.c_str());
+    msg->items_size = total_pos_num;
+    for (int i = 0; i < total_pos_num; i++) {
+        MemTradePosition *pos = msg->items + i;
+        if (i == 0) {
+            strcpy(pos->code, code_0.c_str());
+        } else if (i == 1) {
+            strcpy(pos->code, code_1.c_str());
+        } else if (i == 2) {
+            strcpy(pos->code, code_2.c_str());
+        }
+        pos->long_volume = long_volume;
+        pos->long_pre_volume = long_pre_volume;
+    }
+    InnerFutureMaster master;
+    master.InitPositions(msg);
+
+    // 先测试卖5手，后测试卖15手
+    {
+        LOG_INFO << code_0 << "先测试卖5手，后测试卖15手" << " ==========================================";
+        int64_t bs_flag = co::kBsFlagSell;
+        MemTradeOrder order {};
+        strcpy(order.code, code_0.c_str());
+        order.oc_flag = kOcFlagClose;
+        order.volume = 5;
+        order.price = 9.9;
+        int64_t oc_flag = master.GetCloseYesterdayFlag(bs_flag, order);
+        EXPECT_EQ(oc_flag, co::kOcFlagOpen);
+
+        // 后测试卖15手
+        try {
+            order.volume = 15;
+            int64_t oc_flag = master.GetCloseYesterdayFlag(bs_flag, order);
+        } catch (std::exception& e) {
+            string error = e.what();
+            EXPECT_TRUE(x::StartsWith(error, "[当日开仓数限制]"));
+        }
+    }
+
+    {
+        LOG_INFO << code_1 << "先测试卖5手，后测试卖15手" << " ==========================================";
+        int64_t bs_flag = co::kBsFlagSell;
+        MemTradeOrder order{};
+        strcpy(order.code, code_1.c_str());
+        order.oc_flag = kOcFlagClose;
+        order.volume = 5;
+        order.price = 9.9;
+        int64_t oc_flag = master.GetCloseYesterdayFlag(bs_flag, order);
+        EXPECT_EQ(oc_flag, co::kOcFlagCloseYesterday);
+
+        order.volume = 15;
+        oc_flag = master.GetCloseYesterdayFlag(bs_flag, order);
+        EXPECT_EQ(oc_flag, co::kOcFlagOpen);
+    }
+
+    {
+        LOG_INFO << code_2 << "先测试卖5手，后测试卖15手" << " ==========================================";
+        int64_t bs_flag = co::kBsFlagSell;
+        MemTradeOrder order {};
+        strcpy(order.code, code_2.c_str());
+        order.oc_flag = kOcFlagClose;
+        order.volume = 5;
+        order.price = 9.9;
+        int64_t oc_flag = master.GetCloseYesterdayFlag(bs_flag, order);
+        EXPECT_EQ(oc_flag, co::kOcFlagClose);
+
+        order.volume = 15;
+        oc_flag = master.GetCloseYesterdayFlag(bs_flag, order);
+        EXPECT_EQ(oc_flag, co::kOcFlagOpen);
     }
 }

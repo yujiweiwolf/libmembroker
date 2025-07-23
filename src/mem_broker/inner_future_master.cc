@@ -35,7 +35,7 @@ void InnerFutureMaster::InitCffexParam() {
 }
 
 void InnerFutureMaster::InitPositions(MemGetTradePositionMessage* rep) {
-    LOG_INFO << "set init future position";
+    LOG_INFO << "set init future position, size: " << rep->items_size;
     InitCffexParam();
     positions_.clear();
     open_cache_.insert(std::make_pair("IF", 0));
@@ -93,7 +93,6 @@ void InnerFutureMaster::HandleOrderReq(int64_t bs_flag, const MemTradeOrder& ord
     if (!IsAccountInitialized()) {
         return;
     }
-    CheckRisk(order.code, bs_flag, order.oc_flag, order.volume);
 
     InnerFuturePositionPtr pos = GetPosition(code, bs_flag, oc_flag);
     if (pos) {
@@ -111,6 +110,12 @@ void InnerFutureMaster::HandleOrderReq(int64_t bs_flag, const MemTradeOrder& ord
 void InnerFutureMaster::HandleOrderRep(int64_t bs_flag, const MemTradeOrder& order) {
     // 处理委托废单响应，解冻数量
     if (strlen(order.order_no) > 0) {
+        LOG_INFO << "报单成功, 不处理, code: " << order.code
+                        << ", bs_flag: " << bs_flag
+                        << ", oc_flag: " << order.oc_flag
+                        << ", order_no: " << order.order_no
+                        << ", price: " << order.price
+                        << ", volume: " << order.volume;
         return;
     }
     std::string code = order.code;
@@ -173,8 +178,10 @@ void InnerFutureMaster::HandleKnock(const MemTradeKnock& knock) {
         LOG_INFO << "[AutoOpenClose]["
             << code << ", bs_flag: " << bs_flag << "] OnKnock: "
             << "oc_flag: " << oc_flag
-            << ", match_volume: " << match_volume
-            << ", withdraw_volume: " << withdraw_volume
+            << ", order_no: " << knock.order_no
+            << ", match_no: " << knock.match_no
+            << ", match_type: " << knock.match_type
+            << ", match_volume: " << knock.match_volume
             << ", before " << before << ", after " << after;
     }
 }
@@ -326,54 +333,150 @@ void InnerFutureMaster::Update(InnerFuturePositionPtr pos, int64_t oc_flag, int6
 }
 
 int64_t InnerFutureMaster::GetAutoOcFlag(int64_t bs_flag, const MemTradeOrder& order) {
-    // 买开（bs_flag=买，oc_flag=自动）:
-    // 1.如果有卖方向头寸，则执行：买平；
-    // 2.如果没有卖方向头寸或卖方向头寸不足，则执行：买开
-    // 卖开（bs_flag=买，oc_flag=自动）：
-    // 1.如果有买方向头寸，则执行：卖平;
-    // 2.如果没有买方向头寸或买方向头寸不足，则执行：卖开
-    if (order.oc_flag != co::kOcFlagAuto) {  // 不是自动开平仓，直接返回请求中设定的开平仓标记
-        CheckRisk(order.code, bs_flag, order.oc_flag, order.volume);
-        return order.oc_flag;
-    }
-    int64_t ret_oc_flag = kOcFlagOpen;  // 默认开仓
+//    中金所开平逻辑：
+//    1 有昨仓，则平
+//    2 有昨仓，且今天开过仓，则平。强制是强平指令， 也会转为开
+//    3 开仓时，检查此品种今天的开仓手数
+//
+//    上期所和INE，先开昨，后平今，区分平昨和平今
+//    1 有昨仓，则平昨
+//    2 有今仓，则平今
+//    2 今仓 + 昨仓 > order_volume，则开仓
+//
+//    CZCE和DCE，先平今，后平昨，先开先平，不区分平昨和平今
+//    1 有今仓，则平仓
+//    2 有昨仓，则平仓
+//    3 今仓 + 昨仓 > order_volume，则平仓
     string code = order.code;
-    int64_t order_volume = order.volume;
-
-    auto itr_acc = positions_.find(code);
-    if (itr_acc == positions_.end()) {  // 没有持仓，直接返回开仓
-        return ret_oc_flag;
+    int64_t market = order.market;
+    if (market == 0) {
+        market = co::CodeToMarket(code);
     }
-
+    int64_t order_volume = order.volume;
+    int64_t ret_oc_flag = kOcFlagOpen;  // 默认开仓
+    auto itr_acc = positions_.find(code);
+    if (itr_acc == positions_.end()) {
+        // 没有持仓，默认开仓, 如果是股指，继续检查开仓数量
+        GetPosition(code, bs_flag, kOcFlagOpen);
+        itr_acc = positions_.find(code);
+    }
     InnerFuturePositionPtr pos;
     if (bs_flag == kBsFlagBuy) {
         pos = itr_acc->second->second;  // 买时，先找到对应的空头
     } else {
         pos = itr_acc->second->first;   // 卖时，先找到对应的多头
     }
-
-    int64_t market = pos->marker_;
     int64_t yd_available_pos = pos->GetYesterdayAvailableVolume();
     int64_t td_available_pos = pos->GetTodayAvailableVolume();
-    if (market == co::kMarketSHFE || market == co::kMarketINE) {
-        if (yd_available_pos >= order_volume) {
-            ret_oc_flag = kOcFlagCloseYesterday;
-        } else if (td_available_pos > order_volume) {
-            ret_oc_flag = kOcFlagCloseToday; // 也可以是 kOcFlagClose
-        }
-    } else if (market == co::kMarketCFFEX) {
+
+    if (market == kMarketCFFEX) {
+        // 风控策略：限制股指期货当日开仓数量
         string type = code.length() > 2 ? code.substr(0, 2) : "";
-        auto it = open_cache_.find(type);
-        if (it->second == 0) {
-            if (yd_available_pos >= order_volume) {
+        int64_t open_volume = 0;  // 当前期货类型的已开仓数和开仓冻结数之和
+        if (auto it = open_cache_.find(type); it != open_cache_.end()) {
+            open_volume = it->second;
+        }
+        // 自动开平
+        if (order.oc_flag == co::kOcFlagAuto) {
+            if (open_volume == 0 && yd_available_pos >= order_volume) {
                 ret_oc_flag = kOcFlagClose;
             }
-        } else {
-            LOG_INFO << "股指代码: " << order.code << ", 品种: " << type << ", 今仓手数: " << it->second << ", 只能开仓, 不能平仓";
+        } else if (order.oc_flag == kOcFlagClose) {
+            // 今天开过仓, 只能开仓, 不能平仓, 平强制转化为开
+            if (open_volume > 0) {
+                ret_oc_flag = kOcFlagOpen;
+            }
+        }
+        // 最后一步，检查开仓数量
+        if (max_today_opening_volume_ >= 0 && ret_oc_flag == kOcFlagOpen) {
+            if (order_volume + open_volume > max_today_opening_volume_) {
+                stringstream ss;
+                ss << "[当日开仓数限制]自动开平检查失败，委托数:" << order_volume << "，已开仓:" << open_volume << "，最大开仓数限制:"
+                   << max_today_opening_volume_;
+                string str = ss.str();
+                throw runtime_error(str);
+            }
         }
     } else {
-        if ((yd_available_pos + td_available_pos) >= order_volume) {
+        if (order.oc_flag == co::kOcFlagAuto) {  // 自动开平
+            if (market == co::kMarketSHFE || market == co::kMarketINE) {
+                if (yd_available_pos >= order_volume) {
+                    ret_oc_flag = kOcFlagCloseYesterday;
+                } else if (td_available_pos > order_volume) {
+                    ret_oc_flag = kOcFlagCloseToday; // 也可以是 kOcFlagClose
+                }
+            } else {
+                if ((yd_available_pos + td_available_pos) >= order_volume) {
+                    ret_oc_flag = kOcFlagClose;
+                }
+            }
+        } else {
+            ret_oc_flag = order.oc_flag;
+        }
+    }
+    if (order.oc_flag == co::kOcFlagAuto) {
+        LOG_INFO << "[AutoOpenClose]["
+                 << code
+                 << ", bs_flag: " << bs_flag
+                 << ", volume: " << order.volume
+                 << ", oc_flag: " << order.oc_flag<< "] GetAutoOcFlag: "
+                 << "ret oc_flag: " << ret_oc_flag
+                 << ", " << pos->ToString();
+    }
+    return ret_oc_flag;
+}
+
+// 平昨仓,不平今仓, 如果昨仓数量不足,就开仓
+int64_t InnerFutureMaster::GetCloseYesterdayFlag(int64_t bs_flag, const MemTradeOrder& order) {
+    string code = order.code;
+    int64_t market = order.market;
+    if (market == 0) {
+        market = co::CodeToMarket(code);
+    }
+    int64_t order_volume = order.volume;
+    int64_t ret_oc_flag = kOcFlagOpen;  // 默认开仓
+    auto itr_acc = positions_.find(code);
+    if (itr_acc == positions_.end()) {
+        // 没有持仓，默认开仓, 如果是股指，继续检查开仓数量
+        GetPosition(code, bs_flag, kOcFlagOpen);
+        itr_acc = positions_.find(code);
+    }
+    InnerFuturePositionPtr pos;
+    if (bs_flag == kBsFlagBuy) {
+        pos = itr_acc->second->second;  // 买时，先找到对应的空头
+    } else {
+        pos = itr_acc->second->first;   // 卖时，先找到对应的多头
+    }
+    int64_t yd_available_pos = pos->GetYesterdayAvailableVolume();
+
+    if (market == kMarketCFFEX) {
+        // 风控策略：限制股指期货当日开仓数量
+        string type = code.length() > 2 ? code.substr(0, 2) : "";
+        int64_t open_volume = 0;  // 当前期货类型的已开仓数和开仓冻结数之和
+        if (auto it = open_cache_.find(type); it != open_cache_.end()) {
+            open_volume = it->second;
+        }
+
+        if (open_volume == 0 && yd_available_pos >= order_volume) {
             ret_oc_flag = kOcFlagClose;
+        }
+        // 最后一步，检查开仓数量
+        if (max_today_opening_volume_ >= 0 && ret_oc_flag == kOcFlagOpen) {
+            if (order_volume + open_volume > max_today_opening_volume_) {
+                stringstream ss;
+                ss << "[当日开仓数限制]自动开平检查失败，委托数:" << order_volume << "，已开仓:" << open_volume << "，最大开仓数限制:"
+                   << max_today_opening_volume_;
+                string str = ss.str();
+                throw runtime_error(str);
+            }
+        }
+    } else {
+        if (yd_available_pos >= order_volume) {
+            if (market == co::kMarketSHFE || market == co::kMarketINE) {
+                ret_oc_flag = kOcFlagCloseYesterday;
+            } else {
+                ret_oc_flag = kOcFlagClose;
+            }
         }
     }
     LOG_INFO << "[AutoOpenClose]["
@@ -382,69 +485,6 @@ int64_t InnerFutureMaster::GetAutoOcFlag(int64_t bs_flag, const MemTradeOrder& o
              << ", order_volume: " << order.volume
              << ", " << pos->ToString();
     return ret_oc_flag;
-}
-
-// 平昨仓,不平今仓, 如果昨仓数量不足,就开仓
-int64_t InnerFutureMaster::GetCloseYesterdayFlag(int64_t bs_flag, const MemTradeOrder& order) {
-    int64_t ret_oc_flag = kOcFlagOpen;  // 默认开仓
-    string code = order.code;
-    int64_t order_volume = order.volume;
-
-    auto itr_acc = positions_.find(code);
-    if (itr_acc == positions_.end()) {  // 没有持仓，直接返回开仓
-        return ret_oc_flag;
-    }
-
-    InnerFuturePositionPtr pos;
-    if (bs_flag == kBsFlagBuy) {
-        pos = itr_acc->second->second;  // 买时，先找到对应的空头
-    } else {
-        pos = itr_acc->second->first;
-    }
-
-    int64_t market = pos->marker_;
-    int64_t yd_available_pos = pos->yd_init_volume_ + pos->yd_close_volume_ - pos->yd_closing_volume_;
-    if (market == co::kMarketSHFE || market == co::kMarketINE) {
-        if (yd_available_pos >= order_volume) {
-            ret_oc_flag = kOcFlagCloseYesterday;
-        }
-    } else if (market == co::kMarketCFFEX) {
-        string type = code.length() > 2 ? code.substr(0, 2) : "";
-        auto it = open_cache_.find(type);
-        if (it->second == 0) {
-            if (yd_available_pos >= order_volume) {
-                ret_oc_flag = kOcFlagClose;
-            }
-        } else {
-            LOG_INFO << "股指代码: " << order.code << " 今天开过仓, 只能开仓, 不能平仓";
-        }
-    } else {
-        if (yd_available_pos >= order_volume) {
-            ret_oc_flag = kOcFlagCloseYesterday;
-        }
-    }
-    return ret_oc_flag;
-}
-
-void InnerFutureMaster::CheckRisk(const string& code, int64_t bs_flag, int64_t oc_flag, int64_t order_volume) {
-    if (code.length() > kCFFEXOptionLength) {
-        return;
-    }
-    // 风控策略：限制股指期货当日开仓数量
-    if (max_today_opening_volume_ >= 0 && oc_flag == kOcFlagOpen) {
-        string type = code.length() > 2 ? code.substr(0, 2) : "";
-        int64_t open_volume = 0; // 当前期货类型的已开仓数和开仓冻结数之和
-        auto it = open_cache_.find(type);
-        if (it != open_cache_.end()) {
-            open_volume = it->second;
-        }
-        if (order_volume + open_volume > max_today_opening_volume_) {
-            stringstream ss;
-            ss << "[开仓数限制]风控检查失败，委托数:" << order_volume << "，已开仓:" << open_volume << "，最大开仓数限制:" << max_today_opening_volume_;
-            string str = ss.str();
-            throw runtime_error(str);
-        }
-    }
 }
 
 bool InnerFutureMaster::IsAccountInitialized() {

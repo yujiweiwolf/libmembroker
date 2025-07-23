@@ -76,7 +76,6 @@ class InnerFutureMaster {
     void InitCffexParam();
     bool IsAccountInitialized();
     void Update(InnerFuturePositionPtr pos, int64_t oc_flag, int64_t order_volume, int64_t match_volume, int64_t withdraw_volume);
-    void CheckRisk(const string& code, int64_t bs_flag, int64_t oc_flag, int64_t order_volume);
 
  private:
     bool init_flag_ = false;

@@ -119,14 +119,14 @@ void MemBroker::SendQueryTradeKnock(MemGetTradeKnockMessage* req) {
 }
 
 void MemBroker::SendTradeOrder(MemTradeOrderMessage* req) {
-    server_->BeginTask();
     try {
         auto account = GetAccount(req->fund_id);
         int64_t trade_type = account->type;
         MemTradeOrder* first = (MemTradeOrder*)((char*)req + sizeof(MemTradeOrderMessage));
         for (int i = 0; i < req->items_size; ++i) {
-            MemTradeOrder* order = first + i;
+            MemTradeOrder* order = req->items + i;
             int64_t oc_flag = order->oc_flag;
+            LOG_INFO << req->fund_id << ", trade_type: " << account->type << ", oc_flag: " << oc_flag;
             if (trade_type == kTradeTypeSpot && enable_stock_short_selling_) {
                 // 处理信用账户自动融券逻辑
                 order->oc_flag = inner_stock_master_.GetAutoOcFlag(req->bs_flag, *order);
@@ -138,10 +138,8 @@ void MemBroker::SendTradeOrder(MemTradeOrderMessage* req) {
                 }
                 inner_option_master_.HandleOrderReq(req->bs_flag, *order);
             } else if (trade_type == kTradeTypeFuture) {
-                // 处理期货自动开平仓逻辑：获取自动开平仓标记
-                if (oc_flag == kOcFlagAuto) {
-                    order->oc_flag = inner_future_master_.GetAutoOcFlag(req->bs_flag, *order);
-                }
+                // 处理期货自动开平仓逻辑：获取自动开平仓标记, 平仓可能变成开仓
+                order->oc_flag = inner_future_master_.GetAutoOcFlag(req->bs_flag, *order);
                 inner_future_master_.HandleOrderReq(req->bs_flag, *order);
             }
         }
@@ -158,11 +156,9 @@ void MemBroker::SendTradeOrder(MemTradeOrderMessage* req) {
         memcpy(rep->error, error.c_str(), sizeof(rep->error));
         SendRtnMessage(string(buffer, length), kMemTypeTradeOrderRep);
     }
-    server_->EndTask();
 }
 
 void MemBroker::SendTradeWithdraw(MemTradeWithdrawMessage* req) {
-    server_->BeginTask();
     try {
         OnTradeWithdraw(req);
     } catch (std::exception & e) {
@@ -177,7 +173,6 @@ void MemBroker::SendTradeWithdraw(MemTradeWithdrawMessage* req) {
         memcpy(rep->error, error.c_str(), sizeof(rep->error));
         SendRtnMessage(string(buffer, length), kMemTypeTradeWithdrawRep);
     }
-    server_->EndTask();
 }
 
 void MemBroker::SendRtnMessage(const std::string& raw, int64_t type) {

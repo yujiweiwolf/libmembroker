@@ -234,6 +234,7 @@ int64_t InnerOptionMaster::GetAutoOcFlag(int64_t bs_flag, const MemTradeOrder& o
     if (pos->GetAvailableVolume() >= order_volume) {
         ret_oc_flag = kOcFlagClose;
     }
+    LOG_INFO << pos->ToString();
     return ret_oc_flag;
 }
 
