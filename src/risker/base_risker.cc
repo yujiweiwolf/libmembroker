@@ -1,4 +1,4 @@
-// Copyright 2021 Fancapital Inc.  All rights reserved.
+// Copyright 2025 Fancapital Inc.  All rights reserved.
 #include "../../src/risker/base_risker.h"
 
 namespace co {

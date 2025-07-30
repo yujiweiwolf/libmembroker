@@ -229,7 +229,6 @@ class FlowControlQueue {
     void Push(BrokerMsg* msg);
 
  private:
-    flatbuffers::FlatBufferBuilder fbb_;
     int64_t request_timeout_ms_ = 0; // 报单超时阈值
     int64_t idle_sleep_ns_ = 0;
     BrokerQueue* broker_queue_ = nullptr;

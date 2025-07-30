@@ -1,15 +1,10 @@
-// Copyright 2021 Fancapital Inc.  All rights reserved.
+// Copyright 2025 Fancapital Inc.  All rights reserved.
 #pragma once
 #include <string>
 #include <vector>
 #include <memory>
 #include "risk_options.h"
 #include "coral/coral.h"
-
-#ifdef _WIN32
-#define LOG_INFO __info
-#define LOG_ERROR __error
-#endif
 
 namespace co {
 /**

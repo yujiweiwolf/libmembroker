@@ -19,14 +19,9 @@ broker:
   mem_rep_file: broker_rep
 
 fake:
-  accounts:
-    - {fund_id: "S1", trade_type: "spot", markets: [".SZ"]}
-
-fake1:
-  accounts:
-    - {fund_id: "S1", trade_type: "spot", markets: [".SZ"]}
-    - {fund_id: "F1", trade_type: "future", markets: [".CFFEX", ".DCE"]}
-    - {fund_id: "O1", trade_type: "option", markets: [".SH", ".SZ"]}
+  fund_id: "S1"
+  trade_type: "spot"
+  name: "普通测试帐号"
 
 # 机器上的所有帐号都默认这个配置，即使不填也是此配置
 risk:

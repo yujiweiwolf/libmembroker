@@ -1,4 +1,4 @@
-// Copyright 2021 Fancapital Inc.  All rights reserved.
+// Copyright 2025 Fancapital Inc.  All rights reserved.
 #pragma once
 #include "../base_risker.h"
 #include "order_book.h"
@@ -66,7 +66,6 @@ class AntiSelfKnockRisker : public Risker {
     std::unordered_map<std::string, OrderPtr> single_orders_;
     // 批量委托，委托全部结束后立即删除 <fund_id>#<batch_no> -> orders
     std::unordered_map<std::string, std::unique_ptr<std::vector<OrderPtr>>> batch_orders_;
-    flatbuffers::FlatBufferBuilder fbb_;
     // 先收到成交回报, 后收到报单响应
     std::unordered_map<std::string, std::unique_ptr<std::vector<MemTradeKnock>>> knock_first_orders_;
 };

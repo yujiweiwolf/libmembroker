@@ -1,8 +1,5 @@
-// Copyright 2021 Fancapital Inc.  All rights reserved.
+// Copyright 2025 Fancapital Inc.  All rights reserved.
 #pragma once
-#include <map>
-#include <string>
-#include <memory>
 #include "options.h"
 #include "mem_struct.h"
 #include "inner_option_master.h"
@@ -23,8 +20,7 @@ class MemBroker {
 
     const std::map<string, MemTradeAccount>& GetAccounts() const;
     co::MemTradeAccount* GetAccount(const string& fund_id);
-    bool ExitAccount(const string& fund_id);
-    void AddAccount(const co::MemTradeAccount& account);
+    void SetAccount(const MemTradeAccount& account);
 
     // 查询和报撤单请求
     void SendQueryTradeAsset(MemGetTradeAssetMessage* req);
@@ -58,7 +54,7 @@ class MemBroker {
 
  private:
     MemBrokerServer* server_ = nullptr;
-    std::map<string, MemTradeAccount> accounts_;  // 支持的所有资金账号，由底层在on_init()初始化函数中填写， fund_id -> trade_type
+    MemTradeAccount account_;
     bool enable_stock_short_selling_ = false;  // 是否启用股票自动融券买卖
     int64_t request_timeout_ms_ = 0;
     InnerFutureMaster inner_future_master_;  // 期货内部持仓管理

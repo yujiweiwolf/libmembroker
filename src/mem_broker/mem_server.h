@@ -1,4 +1,4 @@
-// Copyright 2021 Fancapital Inc.  All rights reserved.
+// Copyright 2025 Fancapital Inc.  All rights reserved.
 #pragma once
 #include <vector>
 #include <map>
@@ -15,69 +15,6 @@
 #include "../risker/risk_master.h"
 
 namespace co {
-class QueryContext {
- public:
-    inline std::string fund_id() const {
-        return fund_id_;
-    }
-    inline void set_fund_id(std::string fund_id) {
-        fund_id_ = fund_id;
-    }
-    inline std::string fund_name() const {
-        return fund_name_;
-    }
-    inline void set_fund_name(std::string fund_name) {
-        fund_name_ = fund_name;
-    }
-    inline bool inited() const {
-        return inited_;
-    }
-    inline void set_inited(bool inited) {
-        inited_ = inited;
-    }
-    inline int64_t req_time() const {
-        return req_time_;
-    }
-    inline void set_req_time(int64_t ts) {
-        req_time_ = ts;
-    }
-    inline int64_t rep_time() const {
-        return rep_time_;
-    }
-    inline void set_rep_time(int64_t ts) {
-        rep_time_ = ts;
-    }
-    inline int64_t last_success_time() const {
-        return last_success_time_;
-    }
-    inline void set_last_success_time(int64_t ts) {
-        last_success_time_ = ts;
-    }
-    inline std::string cursor() const {
-        return cursor_;
-    }
-    inline void set_cursor(std::string cursor) {
-        cursor_ = cursor;
-    }
-    inline std::string next_cursor() const {
-        return next_cursor_;
-    }
-    inline void set_next_cursor(std::string next_cursor) {
-        next_cursor_ = next_cursor;
-    }
-
- private:
-    std::string fund_id_;
-    std::string fund_name_;
-    bool inited_ = false;  // 初始化查询完成，程序启动后要无sleep查询完所有数据；
-    bool running_ = false;  // 释放正在查询中
-    int64_t req_time_ = 0;  // 当前请求时间戳
-    int64_t rep_time_ = 0;  // 当前响应时间戳
-    int64_t last_success_time_ = 0;  // 最后查询成功的时间戳
-    std::string cursor_;  // 最后查询游标
-    std::string next_cursor_;  // 下一次查询游标
-};
-
 class MemBrokerServer {
  public:
     MemBrokerServer();
@@ -87,18 +24,16 @@ class MemBrokerServer {
     void Init(MemBrokerOptionsPtr option, const std::vector<std::shared_ptr<RiskOptions>>& risk_opts, MemBrokerPtr broker);
 
     void Start();
-
     void Join();
-
     void Run();
 
     bool ExitAccount(const string& fund_id);
+    void SetAccount(const MemTradeAccount& account);
     void BeginTask();
     void EndTask();
 
-    void SendRtnMessage(const std::string& raw, int64_t type);
-
     void OnStart();
+    void SendRtnMessage(const std::string& raw, int64_t type);
 
  protected:
     void RunQuery();
@@ -128,20 +63,20 @@ class MemBrokerServer {
  private:
     MemBrokerOptionsPtr opt_;
     MemBrokerPtr broker_;
-    RiskMasterPtr risker_;
+    RiskMasterPtr risk_;
     std::string node_name_;
+    MemTradeAccount account_;
     std::vector<std::shared_ptr<std::thread>> threads_;
 
-    std::map<std::string, QueryContext*> asset_contexts_;
-    std::map<std::string, QueryContext*> position_contexts_;
-    std::map<std::string, QueryContext*> knock_contexts_;
+    QueryContext asset_context_;
+    QueryContext position_context_;
+    QueryContext knock_context_;
     int sh_th_tps_limit_ = 1;
     int sz_th_tps_limit_ = 1;
 
-    std::map<std::string, MemTradeAsset> assets_;
-    std::map<std::string, std::shared_ptr<std::map<std::string, MemTradePosition>>> positions_;  // fund_id -> {code -> obj}
+    MemTradeAsset asset_;
+    std::unordered_map<std::string, MemTradePosition> positions_;
     std::set<std::string> knocks_;
-    std::set<std::string> pos_code_;
 
     int64_t active_task_timestamp_ = 0;
     x::MMapWriter rep_writer_;

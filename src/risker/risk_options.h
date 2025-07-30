@@ -1,9 +1,7 @@
-// Copyright 2021 Fancapital Inc.  All rights reserved.
-
+// Copyright 2025 Fancapital Inc.  All rights reserved.
 #pragma once
 #include <string>
 #include <memory>
-
 #include "coral/coral.h"
 
 namespace co {

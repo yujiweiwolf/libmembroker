@@ -1,4 +1,4 @@
-// Copyright 2021 Fancapital Inc.  All rights reserved.
+// Copyright 2025 Fancapital Inc.  All rights reserved.
 #pragma once
 #include "x/x.h"
 #include "coral/coral.h"
@@ -64,6 +64,16 @@ struct HeartBeatMessage {
 struct MemMonitorRiskMessage {
     int64_t timestamp = 0;
     char error[1024];
+};
+
+struct QueryContext {
+    std::string fund_id;
+    std::string fund_name;
+    int64_t req_time = 0;  // 当前请求时间戳
+    int64_t rep_time = 0;  // 当前响应时间戳
+    int64_t last_success_time = 0;  // 最后查询成功的时间戳
+    std::string cursor;  // 最后查询游标
+    std::string next_cursor;  // 下一次查询游标
 };
 }  // namespace co
 

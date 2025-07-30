@@ -1,12 +1,5 @@
-// Copyright 2021 Fancapital Inc.  All rights reserved.
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <memory>
-#include <regex>
-#include <utility>
+// Copyright 2025 Fancapital Inc.  All rights reserved.
 #include <boost/filesystem.hpp>
-#include <boost/algorithm/hex.hpp>
 #include "mem_server.h"
 
 namespace co {
@@ -14,7 +7,8 @@ MemBrokerServer::MemBrokerServer() {
     start_time_ = x::RawDateTime();
     queue_ = std::make_shared<BrokerQueue>();
     flow_control_queue_ = std::make_shared<FlowControlQueue>(queue_.get());
-    risker_ = std::make_shared<RiskMaster>();
+    risk_ = std::make_shared<RiskMaster>();
+    memset(&asset_, 0, sizeof(asset_));
 }
 
 MemBrokerServer::~MemBrokerServer() {
@@ -23,8 +17,8 @@ MemBrokerServer::~MemBrokerServer() {
 void MemBrokerServer::Init(MemBrokerOptionsPtr option, const std::vector<std::shared_ptr<RiskOptions>>& risk_opts, MemBrokerPtr broker) {
     opt_ = option;
     broker_ = broker;
-    risker_->Init(risk_opts);
-    risker_->Start();
+    risk_->Init(risk_opts);
+    risk_->Start();
     enable_flow_control_ = opt_->IsFlowControlEnabled();
     if (enable_flow_control_) {
         flow_control_queue_->Init(opt_);
@@ -53,32 +47,21 @@ void MemBrokerServer::Run() {
     rep_writer_.Open(opt_->mem_dir(), opt_->mem_rep_file(), kRepMemSize << 20, true);
     broker_->Init(*opt_, this);
 
-    auto& accounts = broker_->GetAccounts();
-    for (const auto& [key, value] : accounts) {
-        // 只考虑股票
-        if (value.type == kTradeTypeSpot) {
-            for (auto& it : opt_->flow_controls()) {
-                if (co::kMarketSH == it->market()) {
-                    sh_th_tps_limit_ = it->th_tps_limit();
-                } else if (co::kMarketSZ == it->market()) {
-                    sz_th_tps_limit_ = it->th_tps_limit();
-                }
+    // 只考虑股票
+    if (account_.type == kTradeTypeSpot) {
+        for (auto& it : opt_->flow_controls()) {
+            if (co::kMarketSH == it->market()) {
+                sh_th_tps_limit_ = it->th_tps_limit();
+            } else if (co::kMarketSZ == it->market()) {
+                sz_th_tps_limit_ = it->th_tps_limit();
             }
-            LOG_INFO << "account: " << key << ", sh_th_tps_limit: " << sh_th_tps_limit_ << ", sz_th_tps_limit: " << sz_th_tps_limit_;
-            break;
         }
+        LOG_INFO << ", sh_th_tps_limit: " << sh_th_tps_limit_ << ", sz_th_tps_limit: " << sz_th_tps_limit_;
     }
-    LoadTradingData();
 
-    string fc_spot_fund_id;
-    for (auto itr = accounts.begin(); itr != accounts.end(); ++itr) {
-        auto& acc = itr->second;
-        if (enable_flow_control_ && acc.type == kTradeTypeSpot) {
-            fc_spot_fund_id = acc.fund_id;
-        }
-    }
+    LoadTradingData();
     if (enable_flow_control_) {
-        flow_control_queue_->InitState(fc_spot_fund_id);
+        flow_control_queue_->InitState(account_.fund_id);
     }
 
     threads_.emplace_back(std::make_shared<std::thread>(std::bind(& MemBrokerServer::RunQuery, this)));
@@ -98,51 +81,39 @@ void MemBrokerServer::LoadTradingData() {
         if (type == kMemTypeTradeKnock) {
             MemTradeKnock* knock = (MemTradeKnock*) data;
             IsNewMemTradeKnock(knock);
-        } else if (type == kMemTypeQueryTradeAssetRep) {
-            MemGetTradeAssetMessage* rep = (MemGetTradeAssetMessage*) data;
-            auto item = (MemTradeAsset*)((char*)rep + sizeof(MemGetTradeAssetMessage));
-            for (int i = 0; i < rep->items_size; i++) {
-                MemTradeAsset *asset = item + i;
-                if (strlen(asset->fund_id) > 0) {
-                    assets_[asset->fund_id] = *asset;
-                }
+        } else if (type == kMemTypeTradeAsset) {
+            MemTradeAsset* asset = (MemTradeAsset*) data;
+            if (strcmp(asset->fund_id, account_.fund_id) == 0) {
+                memcpy(&asset, data, sizeof(asset));
             }
-        } else if (type == kMemTypeQueryTradePositionRep) {
-            MemGetTradePositionMessage* rep = (MemGetTradePositionMessage*) data;
-            auto item = (MemTradePosition*)((char*)rep + sizeof(MemGetTradePositionMessage));
-            for (int i = 0; i < rep->items_size; i++) {
-                MemTradePosition *position = item + i;
-                if (strlen(position->fund_id) > 0 && strlen(position->code) > 0) {
-                    std::shared_ptr<std::map<std::string, MemTradePosition>> recode;
-                    auto itor = positions_.find(position->fund_id);
-                    if (itor == positions_.end()) {
-                        recode = std::make_shared<std::map<std::string, MemTradePosition>>();
-                        recode->insert(std::make_pair(position->code, *position));
-                        positions_.insert(std::make_pair(position->fund_id, recode));
-                    } else {
-                        (*recode)[position->code] = *position;
-                    }
+        } else if (type == kMemTypeTradePosition) {
+            MemTradePosition* pos = (MemTradePosition*) data;
+            if (strcmp(pos->fund_id, account_.fund_id) == 0) {
+                auto it = positions_.find(pos->code);
+                if (it == positions_.end()) {
+                    positions_.insert(std::make_pair(pos->code, *pos));
+                } else {
+                    positions_[pos->code] = *pos;
                 }
             }
         } else if (type == 0) {
             break;
         }
     }
-    size_t position_rows = 0;
-    for (auto& itr : positions_) {
-        auto all = itr.second;
-        position_rows += all->size();
-    }
     auto t2 = x::UnixMilli();
     LOG_INFO << "load trading data ok in " << (t2 - t1)
-             << "ms, asset: " << assets_.size()
-             << ", position: " << position_rows
+             << "ms, asset usable: " << asset_.usable
+             << ", position: " << positions_.size()
              << ", knock: " << knocks_.size();
  }
 
 bool MemBrokerServer::ExitAccount(const string& fund_id) {
-     return broker_->ExitAccount(fund_id);
+     return (fund_id.compare(account_.fund_id) == 0 ? true : false);
  }
+
+ void MemBrokerServer::SetAccount(const MemTradeAccount& account) {
+     memcpy(&account_, &account, sizeof(account_));
+}
 
 void MemBrokerServer::BeginTask() {
     active_task_timestamp_ = x::UnixMilli();
@@ -153,64 +124,37 @@ void  MemBrokerServer::EndTask() {
 }
 
 void MemBrokerServer::OnStart() {
-    const auto& accounts = broker_->GetAccounts();
-    std::vector<std::string> stock_fund_ids;
-    std::vector<std::string> option_fund_ids;
-    std::vector<std::string> future_fund_ids;
-    for (auto& itr : accounts) {
-        auto acc = itr.second;
-        if (acc.type == kTradeTypeSpot) {
-            stock_fund_ids.push_back(acc.fund_id);
-        } else if (acc.type == kTradeTypeOption) {
-            option_fund_ids.push_back(acc.fund_id);
-        } else if (acc.type == kTradeTypeFuture) {
-            future_fund_ids.push_back(acc.fund_id);
-        }
+    if (opt_->enable_stock_short_selling() && account_.type == kTradeTypeSpot) {
+        LOG_INFO << "query stock init position";
+        char buffer[sizeof(MemGetTradePositionMessage)] = "";
+        MemGetTradePositionMessage* req = (MemGetTradePositionMessage*)buffer;
+        string id = "INIT_STOCK_" + x::UUID();
+        req->timestamp = x::RawDateTime();
+        strncpy(req->id, id.c_str(), id.length());
+        strncpy(req->fund_id, account_.fund_id, sizeof(req->fund_id));
+        queue_->Push(nullptr, kMemTypeQueryTradePositionReq, string(static_cast<const char*>(buffer), sizeof(MemGetTradePositionMessage)));
     }
 
-    if (opt_->enable_stock_short_selling() && !stock_fund_ids.empty()) {
-        for (auto& it : stock_fund_ids) {
-            std::string& fund_id = it;
-            LOG_INFO << "query stock init position: fund_id = " << fund_id << " ...";
-            char buffer[sizeof(MemGetTradePositionMessage)] = "";
-            MemGetTradePositionMessage* req = (MemGetTradePositionMessage*)buffer;
-            string id = "INIT_STOCK_" + x::UUID();
-            req->timestamp = x::RawDateTime();
-            strncpy(req->id, id.c_str(), id.length());
-            strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
-            queue_->Push(nullptr, kMemTypeQueryTradePositionReq,
-                         string(static_cast<const char*>(buffer), sizeof(MemGetTradePositionMessage)));
-        }
+    if (account_.type == kTradeTypeOption) {
+        LOG_INFO << "query option init position";
+        char buffer[sizeof(MemGetTradePositionMessage)] = "";
+        MemGetTradePositionMessage* req = (MemGetTradePositionMessage*)buffer;
+        string id = "INIT_OPTION_" + x::UUID();
+        req->timestamp = x::RawDateTime();
+        strncpy(req->id, id.c_str(), id.length());
+        strncpy(req->fund_id, account_.fund_id, sizeof(req->fund_id));
+        queue_->Push(nullptr, kMemTypeQueryTradePositionReq, string(static_cast<const char*>(buffer), sizeof(MemGetTradePositionMessage)));
     }
 
-    if (!option_fund_ids.empty()) {
-        for (auto& it : option_fund_ids) {
-            std::string& fund_id = it;
-            LOG_INFO << "query option init position: fund_id = " << fund_id << " ...";
-            char buffer[sizeof(MemGetTradePositionMessage)] = "";
-            MemGetTradePositionMessage* req = (MemGetTradePositionMessage*)buffer;
-            string id = "INIT_OPTION_" + x::UUID();
-            req->timestamp = x::RawDateTime();
-            strncpy(req->id, id.c_str(), id.length());
-            strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
-            queue_->Push(nullptr, kMemTypeQueryTradePositionReq,
-                         string(static_cast<const char*>(buffer), sizeof(MemGetTradePositionMessage)));
-        }
-    }
-
-    if (!future_fund_ids.empty()) {
-        for (auto& it : future_fund_ids) {
-            std::string& fund_id = it;
-            LOG_INFO << "query future init position: fund_id = " << fund_id << " ...";
-            char buffer[sizeof(MemGetTradePositionMessage)] = "";
-            MemGetTradePositionMessage* req = (MemGetTradePositionMessage*)buffer;
-            string id = "INIT_FUTURE_" + x::UUID();
-            req->timestamp = x::RawDateTime();
-            strncpy(req->id, id.c_str(), id.length());
-            strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
-            queue_->Push(nullptr, kMemTypeQueryTradePositionReq,
-                         string(static_cast<const char*>(buffer), sizeof(MemGetTradePositionMessage)));
-        }
+    if (account_.type == kTradeTypeFuture) {
+        LOG_INFO << "query future init position";
+        char buffer[sizeof(MemGetTradePositionMessage)] = "";
+        MemGetTradePositionMessage* req = (MemGetTradePositionMessage*)buffer;
+        string id = "INIT_FUTURE_" + x::UUID();
+        req->timestamp = x::RawDateTime();
+        strncpy(req->id, id.c_str(), id.length());
+        strncpy(req->fund_id, account_.fund_id, sizeof(req->fund_id));
+        queue_->Push(nullptr, kMemTypeQueryTradePositionReq,string(static_cast<const char*>(buffer), sizeof(MemGetTradePositionMessage)));
     }
  }
 
@@ -267,7 +211,7 @@ void MemBrokerServer::ReadReqMem() {
                 int length = sizeof(MemTradeOrderMessage) + sizeof(MemTradeOrder) * req->items_size;
                 string error = CheckTradeOrderMessage(req, sh_th_tps_limit_, sz_th_tps_limit_);
                 if (error.empty()) {
-                    risker_->HandleTradeOrderReq(req, &error);
+                    risk_->HandleTradeOrderReq(req, &error);
                 }
                 if (!error.empty()) {
                     char buffer[length] = "";
@@ -281,14 +225,9 @@ void MemBrokerServer::ReadReqMem() {
             } else if (type == kMemTypeTradeWithdrawReq) {
                 MemTradeWithdrawMessage *req = (MemTradeWithdrawMessage*) data;
                 int length = sizeof(MemTradeWithdrawMessage);
-                int64_t trade_type = 0;
-                auto& accounts = broker_->GetAccounts();
-                if (auto it = accounts.find(req->fund_id); it != accounts.end()) {
-                    trade_type = it->second.type;
-                }
-                string error = CheckTradeWithdrawMessage(req, trade_type);
+                string error = CheckTradeWithdrawMessage(req, account_.type);
                 if (error.empty()) {
-                    risker_->HandleTradeWithdrawReq(req, &error);
+                    risk_->HandleTradeWithdrawReq(req, &error);
                 }
                 if (!error.empty()) {
                     char buffer[sizeof(MemTradeWithdrawMessage)] = "";
@@ -350,19 +289,19 @@ void MemBrokerServer::HandleQueueMessage() {
                     }
                     case kMemTypeTradeOrderRep: {
                         MemTradeOrderMessage *msg = reinterpret_cast<MemTradeOrderMessage*>(raw.data());
-                        risker_->HandleTradeOrderRep(msg);
+                        risk_->HandleTradeOrderRep(msg);
                         SendTradeOrderRep(msg);
                         break;
                     }
                     case kMemTypeTradeWithdrawRep: {
                         MemTradeWithdrawMessage *msg = reinterpret_cast<MemTradeWithdrawMessage*>(raw.data());
-                        risker_->HandleTradeWithdrawRep(msg);
+                        risk_->HandleTradeWithdrawRep(msg);
                         SendTradeWithdrawRep(msg);
                         break;
                     }
                     case kMemTypeTradeKnock: {
                         MemTradeKnock *msg = reinterpret_cast<MemTradeKnock*>(raw.data());
-                        risker_->OnTradeKnock(msg);
+                        risk_->OnTradeKnock(msg);
                         SendTradeKnock(msg);
                         break;
                     }
@@ -402,38 +341,26 @@ void MemBrokerServer::HandleQueueMessage() {
 }
 
 void MemBrokerServer::RunQuery() {
-    flatbuffers::FlatBufferBuilder fbb;
     int64_t query_asset_ms = opt_->query_asset_interval_ms();
     int64_t query_position_ms = opt_->query_position_interval_ms();
     int64_t query_knock_ms = opt_->query_knock_interval_ms();
-    auto& accounts = broker_->GetAccounts();
-    for (auto& itr : accounts) {
-        auto acc = itr.second;
-        std::string fund_id = acc.fund_id;
-        std::string fund_name = acc.name;
-        if (query_asset_ms > 0) {
-            auto ctx = new QueryContext();
-            ctx->set_fund_id(fund_id);
-            ctx->set_fund_name(fund_name);
-            ctx->set_last_success_time(x::UnixMilli());
-            asset_contexts_[fund_id] = ctx;
-        }
-        if (query_position_ms > 0) {
-            auto ctx = new QueryContext();
-            ctx->set_fund_id(fund_id);
-            ctx->set_fund_name(fund_name);
-            ctx->set_last_success_time(x::UnixMilli());
-            position_contexts_[fund_id] = ctx;
-        }
-        if (query_knock_ms > 0) {
-            auto ctx = new QueryContext();
-            ctx->set_fund_id(fund_id);
-            ctx->set_fund_name(fund_name);
-            ctx->set_last_success_time(x::UnixMilli());
-            knock_contexts_[fund_id] = ctx;
-        }
+    if (query_asset_ms > 0) {
+        asset_context_.fund_id = account_.fund_id;
+        asset_context_.fund_name = account_.name;
+        asset_context_.last_success_time = x::UnixMilli();
     }
-    if (asset_contexts_.empty() && position_contexts_.empty() && knock_contexts_.empty()) {
+    if (query_position_ms > 0) {
+        position_context_.fund_id = account_.fund_id;
+        position_context_.fund_name = account_.name;
+        position_context_.last_success_time = x::UnixMilli();
+    }
+    if (query_knock_ms > 0) {
+        knock_context_.fund_id = account_.fund_id;
+        knock_context_.fund_name = account_.name;
+        knock_context_.last_success_time = x::UnixMilli();
+    }
+
+    if (query_asset_ms == 0 && query_position_ms == 0 && query_knock_ms == 0) {
         return;
     }
     int64_t asset_timeout_ms = query_asset_ms < 5000 ? 5000 : query_asset_ms;
@@ -443,62 +370,59 @@ void MemBrokerServer::RunQuery() {
     while (true) {
         x::Sleep(100);
         int64_t now = x::UnixMilli();
-        for (auto& itr : asset_contexts_) {
-            auto ctx = itr.second;
-            int64_t max_time = ctx->rep_time() >= ctx->req_time() ? ctx->rep_time() : ctx->req_time();
-            bool active = ctx->rep_time() < ctx->req_time() ? true : false;
+
+        {
+            auto ctx = &asset_context_;
+            int64_t max_time = ctx->rep_time >= ctx->req_time ? ctx->rep_time : ctx->req_time;
+            bool active = ctx->rep_time < ctx->req_time ? true : false;
             if ((!active && now - max_time >= query_asset_ms) || now - max_time >= asset_timeout_ms) {
-                ctx->set_req_time(now);
+                ctx->req_time = now;
                 char buffer[sizeof(MemGetTradeAssetMessage)] = "";
                 MemGetTradeAssetMessage* req = (MemGetTradeAssetMessage*)buffer;
                 string id = x::UUID();
-                string fund_id = ctx->fund_id();
                 req->timestamp = x::RawDateTime();
                 strncpy(req->id, id.c_str(), id.length());
-                strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
+                strcpy(req->fund_id, account_.fund_id);
                 queue_->Push(nullptr, kMemTypeQueryTradeAssetReq,
                              string(static_cast<const char*>(buffer), sizeof(MemTradeWithdrawMessage)));
             }
         }
 
-        for (auto& itr : position_contexts_) {
-            auto ctx = itr.second;
-            int64_t max_time = ctx->rep_time() >= ctx->req_time() ?
-                    ctx->rep_time() : ctx->req_time();
-            bool active = ctx->rep_time() < ctx->req_time() ? true : false;
+        {
+            auto ctx = &position_context_;
+            int64_t max_time = ctx->rep_time >= ctx->req_time ? ctx->rep_time : ctx->req_time;
+            bool active = ctx->rep_time < ctx->req_time ? true : false;
             if ((!active && now - max_time >= query_position_ms) || now - max_time >= position_timeout_ms) {
-                ctx->set_req_time(now);
+                ctx->req_time = now;
                 char buffer[sizeof(MemGetTradePositionMessage)] = "";
                 MemGetTradePositionMessage* req = (MemGetTradePositionMessage*)buffer;
                 string id = x::UUID();
-                string fund_id = ctx->fund_id();
                 req->timestamp = x::RawDateTime();
                 strncpy(req->id, id.c_str(), id.length());
-                strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
+                strcpy(req->fund_id, account_.fund_id);
                 queue_->Push(nullptr, kMemTypeQueryTradePositionReq,
                              string(static_cast<const char*>(buffer), sizeof(MemGetTradePositionMessage)));
             }
         }
 
-        for (auto& itr : knock_contexts_) {
-            auto ctx = itr.second;
-            std::string next_cursor = ctx->next_cursor();
+        {
+            auto ctx = &knock_context_;
+            std::string next_cursor = ctx->next_cursor;
             bool must_query = false;
-            if (!ctx->inited() && next_cursor != ctx->cursor()) {
+            if (next_cursor != ctx->cursor) {
                 must_query = true;
             }
-            int64_t max_time = ctx->rep_time() >= ctx->req_time() ? ctx->rep_time() : ctx->req_time();
-            bool active = ctx->rep_time() < ctx->req_time() ? true : false;
+            int64_t max_time = ctx->rep_time >= ctx->req_time ? ctx->rep_time : ctx->req_time;
+            bool active = ctx->rep_time < ctx->req_time ? true : false;
             if ((!active && now - max_time >= knock_timeout_ms) || now - max_time >= knock_timeout_ms || must_query) {
-                ctx->set_req_time(now);
-                ctx->set_cursor(next_cursor);
+                ctx->req_time = now;
+                ctx->cursor = next_cursor;
                 char buffer[sizeof(MemGetTradeKnockMessage)] = "";
                 MemGetTradeKnockMessage* req = (MemGetTradeKnockMessage*)buffer;
                 string id = x::UUID();
-                string fund_id = ctx->fund_id();
                 req->timestamp = x::RawDateTime();
                 strncpy(req->id, id.c_str(), id.length());
-                strncpy(req->fund_id, fund_id.c_str(), fund_id.length());
+                strcpy(req->fund_id, account_.fund_id);
                 strncpy(req->cursor, next_cursor.c_str(), next_cursor.length());
                 queue_->Push(nullptr, kMemTypeQueryTradeKnockReq,
                              string(static_cast<const char*>(buffer), sizeof(MemGetTradeKnockMessage)));
@@ -559,51 +483,29 @@ bool MemBrokerServer::MemBrokerServer::IsNewMemTradeKnock(MemTradeKnock* knock) 
 
 void MemBrokerServer::SendQueryTradeAssetRep(MemGetTradeAssetMessage* rep) {
     int64_t ms = x::SubRawDateTime(x::RawDateTime(), rep->timestamp);
-    std::string fund_id = rep->fund_id;
     std::string error = rep->error;
-    QueryContext* ctx = nullptr;
-    auto itr_cursor = asset_contexts_.find(fund_id);
-    if (itr_cursor != asset_contexts_.end()) {
-        ctx = itr_cursor->second;
+    int64_t now = x::UnixMilli();
+    asset_context_.rep_time = now;
+    if (error.empty()) {
+        asset_context_.last_success_time = now;
     }
-    if (ctx) {
-        int64_t now = x::UnixMilli();
-        ctx->set_rep_time(now);
-        if (error.empty()) {
-            ctx->set_last_success_time(now);
-        }
-    }
+
     wait_size_--;
     if (!error.empty()) {
         LOG_ERROR << "[REP]query asset failed in " << ms << "ms: " << error;
         return;
     }
-    auto first = (MemTradeAsset*)((char*)rep + sizeof(MemGetTradeAssetMessage));
+
     for (int i = 0; i < rep->items_size; i++) {
-        MemTradeAsset *asset = first + i;
-        bool flag = false;
-        string fund_id = asset->fund_id;
-        auto it = assets_.find(fund_id);
-        if (it == assets_.end()) {
-            flag = true;
-            assets_.insert(std::make_pair(fund_id, *asset));
-        } else {
-            double epsilon = 0.01;
-            MemTradeAsset* pre = &it->second;
-            if (std::fabs(asset->balance - pre->balance) >= epsilon ||
-                std::fabs(asset->usable - pre->usable) >= epsilon ||
-                std::fabs(asset->margin - pre->margin) >= epsilon ||
-                std::fabs(asset->equity - pre->equity) >= epsilon ||
-                std::fabs(asset->frozen - pre->frozen) >= epsilon ||
-                std::fabs(asset->long_margin_usable - pre->long_margin_usable) >= epsilon ||
-                std::fabs(asset->short_margin_usable - pre->short_margin_usable) >= epsilon ||
-                std::fabs(asset->short_return_usable - pre->short_return_usable) >= epsilon) {
-                flag = true;
-                assets_[fund_id] = *asset;
-            }
-        }
-        if (flag) {
-            LOG_INFO << "[DATA][ASSET] update asset: fund_id: " << fund_id
+        MemTradeAsset *asset = rep->items + i;
+        if (x::Ne(asset->balance, asset_.balance) || x::Ne(asset->usable, asset_.usable) ||
+            x::Ne(asset->margin, asset_.margin) || x::Ne(asset->equity, asset_.equity) ||
+            x::Ne(asset->frozen, asset_.frozen) || x::Ne(asset->long_margin_usable, asset_.long_margin_usable) ||
+            x::Ne(asset->short_margin_usable, asset_.short_margin_usable) ||
+            x::Ne(asset->short_return_usable, asset_.short_return_usable))
+            memcpy(&asset_, asset, sizeof(asset_));
+
+        LOG_INFO << "[DATA][ASSET] update asset: fund_id: " << asset->fund_id
                  << ", timestamp: " << asset->timestamp
                  << ", balance: " << asset->balance
                  << ", usable: " << asset->usable
@@ -612,29 +514,21 @@ void MemBrokerServer::SendQueryTradeAssetRep(MemGetTradeAssetMessage* rep) {
                  << ", long_margin_usable: " << asset->long_margin_usable
                  << ", short_margin_usable: " << asset->short_margin_usable
                  << ", short_return_usable: " << asset->short_return_usable;
-            void* buffer = rep_writer_.OpenFrame(sizeof(MemTradeAsset));
-            memcpy(buffer, asset, sizeof(MemTradeAsset));
-            rep_writer_.CloseFrame(kMemTypeTradeAsset);
-        }
+        void *buffer = rep_writer_.OpenFrame(sizeof(MemTradeAsset));
+        memcpy(buffer, asset, sizeof(MemTradeAsset));
+        rep_writer_.CloseFrame(kMemTypeTradeAsset);
     }
 }
 
 void MemBrokerServer::SendQueryTradePositionRep(MemGetTradePositionMessage* rep) {
     int64_t ms = x::SubRawDateTime(x::RawDateTime(), rep->timestamp);
-    std::string fund_id = rep->fund_id;
     std::string error = rep->error;
-    QueryContext* ctx = nullptr;
-    auto itr_cursor = position_contexts_.find(fund_id);
-    if (itr_cursor != position_contexts_.end()) {
-        ctx = itr_cursor->second;
+    int64_t now = x::UnixMilli();
+    position_context_.rep_time = now;
+    if (error.empty()) {
+        position_context_.last_success_time = now;
     }
-    if (ctx) {
-        int64_t now = x::UnixMilli();
-        ctx->set_rep_time(now);
-        if (error.empty()) {
-            ctx->set_last_success_time(now);
-        }
-    }
+
     std::string id = rep->id;
     if (x::StartsWith(id, "INIT_OPTION_")) {
         broker_->InitPositions(rep, kTradeTypeOption);
@@ -651,111 +545,64 @@ void MemBrokerServer::SendQueryTradePositionRep(MemGetTradePositionMessage* rep)
         LOG_ERROR << "[REP]query position failed in " << ms << "ms: " << error;
         return;
     }
-    auto item = (MemTradePosition*)((char*)rep + sizeof(MemGetTradePositionMessage));
+
     for (int i = 0; i < rep->items_size; i++) {
-        MemTradePosition *position = item + i;
-        if (position->timestamp == 0) {
-            position->timestamp = rep->timestamp;
+        MemTradePosition *pos = rep->items + i;
+        if (pos->timestamp == 0) {
+            pos->timestamp = rep->timestamp;
         }
         bool flag = false;
-        string fund_id = position->fund_id;
-        string code = position->code;
-        auto it = positions_.find(fund_id);
+        string code = pos->code;
+        auto it = positions_.find(code);
         if (it == positions_.end()) {
             flag = true;
-            std::shared_ptr<std::map<std::string, MemTradePosition>> pos = std::make_shared<std::map<std::string, MemTradePosition>>();
-            pos->insert(std::make_pair(code, *position));
-            positions_.insert(std::make_pair(fund_id, pos));
+            positions_.insert(std::make_pair(code, *pos));
         } else {
-            double epsilon = 0.01;
-            std::shared_ptr<std::map<std::string, MemTradePosition>> pos = it->second;
-            auto itor = pos->find(code);
-            if (itor == pos->end()) {
+            auto& pre = it->second;
+            if ((pos->long_volume != pre.long_volume) || x::Ne(pos->long_market_value, pre.long_market_value) ||
+                (pos->short_volume != pre.short_volume) || x::Ne(pos->short_market_value, pre.short_market_value)) {
                 flag = true;
-                pos->insert(std::make_pair(code, *position));
-            } else {
-                MemTradePosition* pre = &itor->second;
-                double epsilon = 0.01;
-                if (position->long_volume != pre->long_volume ||
-                    std::fabs(position->long_market_value - pre->long_market_value) >= epsilon ||
-                    position->long_can_close != pre->long_can_close ||
-                    position->short_volume != pre->short_volume ||
-                    std::fabs(position->short_market_value - pre->short_market_value) >= epsilon ||
-                    position->short_can_close != pre->short_can_close) {
-                    flag = true;
-                    itor->second = *position;
-                }
+                it->second = *pos;
             }
         }
-        pos_code_.insert(code);
         if (flag) {
-            LOG_INFO << "[DATA][POSITION] update position: fund_id: " << fund_id
-                     << ", timestamp: " << position->timestamp
-                     << ", code: " << position->code
-                     << ", long_volume: " << position->long_volume
-                     << ", long_market_value: " << position->long_market_value
-                     << ", long_can_close: " << position->long_can_close
-                     << ", short_volume: " << position->short_volume
-                     << ", short_market_value: " << position->short_market_value
-                     << ", short_can_open: " << position->short_can_open;
+            LOG_INFO << "[DATA][POSITION] update position: fund_id: " << pos->fund_id
+                     << ", timestamp: " << pos->timestamp
+                     << ", code: " << pos->code
+                     << ", long_volume: " << pos->long_volume
+                     << ", long_market_value: " << pos->long_market_value
+                     << ", long_can_close: " << pos->long_can_close
+                     << ", short_volume: " << pos->short_volume
+                     << ", short_market_value: " << pos->short_market_value
+                     << ", short_can_open: " << pos->short_can_open;
             void* buffer = rep_writer_.OpenFrame(sizeof(MemTradePosition));
-            memcpy(buffer, position, sizeof(MemTradePosition));
+            memcpy(buffer, pos, sizeof(MemTradePosition));
             rep_writer_.CloseFrame(kMemTypeTradePosition);
         }
     }
-
     // 删除持仓是0，api不返回对应持仓的问题
-    auto it = positions_.find(fund_id);
-    if (it != positions_.end()) {
-        std::shared_ptr<std::map<std::string, MemTradePosition>> pos = it->second;
-        for (auto itor = pos->begin(); itor != pos->end();) {
-            if (auto item = pos_code_.find(itor->first); item == pos_code_.end()) {
-                LOG_INFO << "fund_id: " << fund_id << ", code: " << itor->second.code << " pos is zero";
-                void* buffer = rep_writer_.OpenFrame(sizeof(MemTradePosition));
-                MemTradePosition* new_pos = (MemTradePosition*) buffer;
-                memset(new_pos, 0,  sizeof(MemTradePosition));
-                strcpy(new_pos->code, itor->second.code);
-                strcpy(new_pos->fund_id, itor->second.fund_id);
-                new_pos->timestamp = itor->second.timestamp;
-                new_pos->market = itor->second.market;
-                rep_writer_.CloseFrame(kMemTypeTradePosition);
-                itor = pos->erase(itor);
-            } else {
-                ++itor;
-            }
-        }
-    }
-    pos_code_.clear();
 }
 
 void MemBrokerServer::SendQueryTradeKnockRep(MemGetTradeKnockMessage* rep) {
-    auto item = (MemTradeKnock*)((char*)rep + sizeof(MemGetTradeKnockMessage));
     int64_t ms = x::SubRawDateTime(x::RawDateTime(), rep->timestamp);
     std::string error = rep->error;
-    std::string fund_id = rep->fund_id;
     std::string next_cursor = rep->next_cursor;
-    QueryContext* ctx = nullptr;
-    auto itr_cursor = knock_contexts_.find(fund_id);
-    if (itr_cursor != knock_contexts_.end()) {
-        ctx = itr_cursor->second;
+    int64_t now = x::UnixMilli();
+    knock_context_.rep_time = now;
+    if (error.empty()) {
+        knock_context_.last_success_time = now;
     }
-    if (ctx) {
-        int64_t now = x::UnixMilli();
-        ctx->set_rep_time(now);
-        if (error.empty()) {
-            ctx->set_last_success_time(now);
-        }
-        if (!next_cursor.empty()) {
-            ctx->set_next_cursor(next_cursor);
-        }
+    if (!next_cursor.empty()) {
+        knock_context_.next_cursor = next_cursor;
     }
+
     wait_size_--;
     if (!error.empty()) {
         LOG_ERROR << "[REP]query knock failed in " << ms << "ms: " << error;
         return;
     }
     for (int i = 0; i < rep->items_size; i++) {
-        MemTradeKnock *knock = item + i;
+        MemTradeKnock *knock = rep->items + i;
         if (IsNewMemTradeKnock(knock)) {
             void* buffer = rep_writer_.OpenFrame(sizeof(MemTradeKnock));
             memcpy(buffer, knock, sizeof(MemTradeKnock));
@@ -824,24 +671,20 @@ void MemBrokerServer::CreateInnerMatchNo(MemTradeKnock* knock) {
      if (strlen(knock->inner_match_no) != 0) {
          return;
      }
-    MemTradeAccount* account = broker_->GetAccount(knock->fund_id);
-    if (account) {
-        if (account->type == co::kTradeTypeSpot) {
-            size_t index = 0;
-            size_t i = 0;
-            for (i = 0; i < strlen(knock->order_no); ++i) {
-                knock->inner_match_no[index++] = knock->order_no[i];
-            }
-            knock->inner_match_no[index++] = '_';
-            for (i = 0; i < strlen(knock->match_no); ++i) {
-                knock->inner_match_no[index++] = knock->match_no[i];
-            }
-            knock->inner_match_no[index++] = '_';
-            for (i = 0; i < strlen(knock->code); ++i) {
-                knock->inner_match_no[index++] = knock->code[i];
-            }
-        } else {
-            strcpy(knock->inner_match_no, knock->match_no);
+
+    if (account_.type == co::kTradeTypeSpot) {
+        size_t index = 0;
+        size_t i = 0;
+        for (i = 0; i < strlen(knock->order_no); ++i) {
+            knock->inner_match_no[index++] = knock->order_no[i];
+        }
+        knock->inner_match_no[index++] = '_';
+        for (i = 0; i < strlen(knock->match_no); ++i) {
+            knock->inner_match_no[index++] = knock->match_no[i];
+        }
+        knock->inner_match_no[index++] = '_';
+        for (i = 0; i < strlen(knock->code); ++i) {
+            knock->inner_match_no[index++] = knock->code[i];
         }
     } else {
         strcpy(knock->inner_match_no, knock->match_no);
@@ -895,13 +738,11 @@ void MemBrokerServer::DoWatch() {
     int64_t ms = x::SubRawDateTime(now, last_heart_beat_);
     if (ms > 10000) {  // 10秒钟一次心跳
         last_heart_beat_ = now;
-        for (auto& it : asset_contexts_) {
-            void* buffer = rep_writer_.OpenFrame(sizeof(HeartBeatMessage));
-            HeartBeatMessage* msg = (HeartBeatMessage*)buffer;
-            strcpy(msg->fund_id, it.first.c_str());
-            msg->timestamp = now;
-            rep_writer_.CloseFrame(kMemTypeHeartBeat);
-        }
+        void* buffer = rep_writer_.OpenFrame(sizeof(HeartBeatMessage));
+        HeartBeatMessage* msg = (HeartBeatMessage*)buffer;
+        strcpy(msg->fund_id, account_.fund_id);
+        msg->timestamp = now;
+        rep_writer_.CloseFrame(kMemTypeHeartBeat);
     }
     std::string text;
     int64_t timeout_orders = 0;
@@ -971,30 +812,16 @@ void MemBrokerServer::DoWatch() {
         }
     }
 
-    if (text.empty() && !asset_contexts_.empty()) {
-        int64_t min_time = 0;
-        for (auto& itr : asset_contexts_) {
-            auto ctx = itr.second;
-            if (min_time <= 0 || ctx->last_success_time() < min_time) {
-                min_time = ctx->last_success_time();
-            }
-        }
+    if (text.empty()) {
+        int64_t min_time = asset_context_.last_success_time;
         int64_t delay_s = (x::UnixMilli() - min_time) / 1000;
         if (delay_s > 60) {
             LOG_WARN << "[watchdog] query asset failed for " << delay_s << "s";
             text = "柜台状态异常：【" + node_name_ + "】查询资金失败超过：" + std::to_string(delay_s) + "秒";
         }
     }
-    if (text.empty() && !position_contexts_.empty()) {
-        int64_t min_time = 0;
-        for (auto& itr : position_contexts_) {
-            auto ctx = itr.second;
-            if (min_time <= 0 || ctx->last_success_time() < min_time) {
-                min_time = ctx->last_success_time();
-            }
-            LOG_INFO << "query pos contexts, fund_id: " << ctx->fund_id() << ", req_time: " << ctx->req_time()
-                            << ", rep_time: " << ctx->rep_time() << ", last_success_time: " << ctx->last_success_time();
-        }
+    if (text.empty()) {
+        int64_t min_time = position_context_.last_success_time;
         int64_t delay_s = (x::UnixMilli() - min_time) / 1000;
         if (delay_s > 60) {
             LOG_WARN << "[watchdog] query position failed for " << delay_s << "s";
@@ -1002,14 +829,8 @@ void MemBrokerServer::DoWatch() {
         }
     }
 
-    if (text.empty() && !knock_contexts_.empty()) {
-        int64_t min_time = 0;
-        for (auto& itr : knock_contexts_) {
-            auto ctx = itr.second;
-            if (min_time <= 0 || ctx->last_success_time() < min_time) {
-                min_time = ctx->last_success_time();
-            }
-        }
+    if (text.empty()) {
+        int64_t min_time = knock_context_.last_success_time;
         int64_t delay_s = (x::UnixMilli() - min_time) / 1000;
         if (delay_s > 60) {
             LOG_WARN << "[watchdog] query knock failed for " << delay_s << "s";

@@ -1,4 +1,4 @@
-// Copyright 2021 Fancapital Inc.  All rights reserved.
+// Copyright 2025 Fancapital Inc.  All rights reserved.
 #pragma once
 #include <map>
 #include <memory>
@@ -18,8 +18,8 @@ class Config {
         return options_;
     }
 
-    const std::map<std::string, std::shared_ptr<MemTradeAccount>>& accounts() const {
-        return accounts_;
+    const MemTradeAccount& account() const {
+        return account_;
     }
 
     const std::vector<std::shared_ptr<RiskOptions>>& risk_opt() const {
@@ -37,7 +37,7 @@ class Config {
  private:
     static Config* instance_;
     MemBrokerOptionsPtr options_;
-    std::map<std::string, std::shared_ptr<MemTradeAccount>> accounts_;
+    MemTradeAccount account_;
     std::vector<std::shared_ptr<RiskOptions>> risk_opts_;
 };
 }  // namespace co

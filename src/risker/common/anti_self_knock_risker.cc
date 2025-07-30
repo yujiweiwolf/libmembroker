@@ -1,4 +1,4 @@
-// Copyright 2021 Fancapital Inc.  All rights reserved.
+// Copyright 2025 Fancapital Inc.  All rights reserved.
 #include "anti_self_knock_risker.h"
 #include "yaml-cpp/yaml.h"
 #include "order_book.h"
