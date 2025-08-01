@@ -17,9 +17,6 @@ class MemBroker {
 
     void Init(const MemBrokerOptions& opt, MemBrokerServer* server);
     void AddT0Code(const string& code);
-
-    const std::map<string, MemTradeAccount>& GetAccounts() const;
-    co::MemTradeAccount* GetAccount(const string& fund_id);
     void SetAccount(const MemTradeAccount& account);
 
     // 查询和报撤单请求

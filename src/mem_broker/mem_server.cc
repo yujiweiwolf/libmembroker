@@ -5,6 +5,7 @@
 namespace co {
 MemBrokerServer::MemBrokerServer() {
     start_time_ = x::RawDateTime();
+    nature_day_ = x::RawDate();
     queue_ = std::make_shared<BrokerQueue>();
     flow_control_queue_ = std::make_shared<FlowControlQueue>(queue_.get());
     risk_ = std::make_shared<RiskMaster>();
@@ -70,6 +71,7 @@ void MemBrokerServer::Run() {
     HandleQueueMessage();
 }
 
+// 期货不读夜盘数据，无影响
 void MemBrokerServer::LoadTradingData() {
     LOG_INFO << "load trading data ...";
     auto t1 = x::UnixMilli();
@@ -80,15 +82,17 @@ void MemBrokerServer::LoadTradingData() {
         int32_t type = rep_reader.Next(&data);
         if (type == kMemTypeTradeKnock) {
             MemTradeKnock* knock = (MemTradeKnock*) data;
-            IsNewMemTradeKnock(knock);
+            if (knock->timestamp / 1000000000LL == nature_day_) {
+                IsNewMemTradeKnock(knock);
+            }
         } else if (type == kMemTypeTradeAsset) {
             MemTradeAsset* asset = (MemTradeAsset*) data;
-            if (strcmp(asset->fund_id, account_.fund_id) == 0) {
-                memcpy(&asset, data, sizeof(asset));
+            if (strcmp(asset->fund_id, account_.fund_id) == 0 && asset->timestamp / 1000000000LL == nature_day_) {
+                memcpy(&asset_, data, sizeof(asset_));
             }
         } else if (type == kMemTypeTradePosition) {
             MemTradePosition* pos = (MemTradePosition*) data;
-            if (strcmp(pos->fund_id, account_.fund_id) == 0) {
+            if (strcmp(pos->fund_id, account_.fund_id) == 0 && pos->timestamp / 1000000000LL == nature_day_) {
                 auto it = positions_.find(pos->code);
                 if (it == positions_.end()) {
                     positions_.insert(std::make_pair(pos->code, *pos));
@@ -107,8 +111,8 @@ void MemBrokerServer::LoadTradingData() {
              << ", knock: " << knocks_.size();
  }
 
-bool MemBrokerServer::ExitAccount(const string& fund_id) {
-     return (fund_id.compare(account_.fund_id) == 0 ? true : false);
+bool MemBrokerServer::JudgeBrokerAccount(const string& fund_id) {
+     return fund_id.compare(account_.fund_id) == 0 ? true : false;
  }
 
  void MemBrokerServer::SetAccount(const MemTradeAccount& account) {
@@ -187,14 +191,14 @@ void MemBrokerServer::ReadReqMem() {
     auto get_req = [&](int32_t type, const void* data)-> bool {
         if (type == kMemTypeTradeOrderReq) {
             MemTradeOrderMessage *msg = (MemTradeOrderMessage*)data;
-            if (ExitAccount(msg->fund_id)) {
+            if (JudgeBrokerAccount(msg->fund_id)) {
                 return true;
             } else {
                 return false;
             }
         } else if (type == kMemTypeTradeWithdrawReq) {
             MemTradeWithdrawMessage *msg = (MemTradeWithdrawMessage *)data;
-            if (ExitAccount(msg->fund_id)) {
+            if (JudgeBrokerAccount(msg->fund_id)) {
                 return true;
             } else {
                 return false;

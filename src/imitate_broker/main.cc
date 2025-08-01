@@ -198,8 +198,8 @@ int main(int argc, char* argv[]) {
         mem_rep_file = options->mem_rep_file();
         std::thread t1(ReadRep);
         string usage("\nTYPE  'q' to quit program\n");
-        usage += "      '1' to order_sh\n";
-        usage += "      '2' to order_sz\n";
+//        usage += "      '1' to order_sh\n";
+//        usage += "      '2' to order_sz\n";
         usage += "      '3' to withdraw\n";
         usage += "      '4' to order\n";
         usage += "      '5' to query asset\n";
@@ -213,7 +213,6 @@ int main(int argc, char* argv[]) {
             switch (c) {
                 case '1':
                 {
-                    order(broker);
                     break;
                 }
                 case '2':

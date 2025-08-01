@@ -27,7 +27,7 @@ class MemBrokerServer {
     void Join();
     void Run();
 
-    bool ExitAccount(const string& fund_id);
+    bool JudgeBrokerAccount(const string& fund_id);
     void SetAccount(const MemTradeAccount& account);
     void BeginTask();
     void EndTask();
@@ -81,6 +81,7 @@ class MemBrokerServer {
     int64_t active_task_timestamp_ = 0;
     x::MMapWriter rep_writer_;
     int64_t start_time_ = 0;
+    int64_t nature_day_ = 0;
     int64_t wait_size_ = 0;
     int64_t last_heart_beat_ = 0;
 
